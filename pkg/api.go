@@ -2,19 +2,21 @@ package rtsync
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
+	"github.com/hiimjako/real-time-sync-obsidian-be/internal/requestutils"
 	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/filestorage"
 	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/middleware"
 )
 
-type CreateFileBody struct {
-	Path    string `json:"path"`
-	Content []byte `json:"content"`
-}
+const (
+	MultipartFileField     = "file"
+	MultipartFilepathField = "path"
+)
 
 type UpdateFileBody struct {
 	Path string `json:"path"`
@@ -111,39 +113,49 @@ func (rts *realTimeSyncServer) fetchFileHandler(w http.ResponseWriter, r *http.R
 }
 
 func (rts *realTimeSyncServer) createFileHandler(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "error reading request body", http.StatusInternalServerError)
+	if !requestutils.IsMultipartFormData(r) {
+		errMsg := fmt.Sprintf("Unsupported Content-Type %q", r.Header.Get("Content-Type"))
+		http.Error(w, errMsg, http.StatusUnsupportedMediaType)
 		return
 	}
 
-	var data CreateFileBody
-	if err = json.Unmarshal(body, &data); err != nil {
-		http.Error(w, "error parsing JSON", http.StatusBadRequest)
+	err := r.ParseMultipartForm(rts.maxFileSize)
+	if err != nil {
+		http.Error(w, "Unable to parse form", http.StatusBadRequest)
 		return
 	}
+
+	file, _, err := r.FormFile(MultipartFileField)
+	if err != nil {
+		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	filepath := r.FormValue(MultipartFilepathField)
 
 	// if there isn't any file an error is returned
-	_, err = rts.db.FetchFileFromWorkspacePath(r.Context(), data.Path)
+	_, err = rts.db.FetchFileFromWorkspacePath(r.Context(), filepath)
 	if err == nil {
 		http.Error(w, ErrDuplicateFile, http.StatusConflict)
 		return
 	}
 
-	diskPath, err := rts.storage.CreateObject(data.Content)
+	diskPath, err := rts.storage.CreateObject(file)
 	if err != nil {
 		http.Error(w, ErrInvalidFile, http.StatusInternalServerError)
 		return
 	}
 
-	mimeType := http.DetectContentType(data.Content)
+	mimeType := requestutils.DetectFileMimeType(file)
+	hash := filestorage.GenerateHash(file)
 	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
 
-	file, err := rts.db.CreateFile(r.Context(), repository.CreateFileParams{
+	dbFile, err := rts.db.CreateFile(r.Context(), repository.CreateFileParams{
 		DiskPath:      diskPath,
-		WorkspacePath: data.Path,
+		WorkspacePath: filepath,
 		MimeType:      mimeType,
-		Hash:          filestorage.GenerateHash(data.Content),
+		Hash:          hash,
 		WorkspaceID:   workspaceID,
 	})
 
@@ -154,7 +166,7 @@ func (rts *realTimeSyncServer) createFileHandler(w http.ResponseWriter, r *http.
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(file); err != nil {
+	if err := json.NewEncoder(w).Encode(dbFile); err != nil {
 		http.Error(w, "error reading request body", http.StatusInternalServerError)
 		return
 	}

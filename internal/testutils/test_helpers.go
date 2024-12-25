@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"testing"
 
@@ -39,18 +41,32 @@ func WithAuthHeader(secretKey []byte, workspaceID int64) requestOption {
 	}
 }
 
+func WithContentTypeHeader(contentType string) requestOption {
+	return func(req *http.Request) error {
+		req.Header.Add("Content-Type", contentType)
+		return nil
+	}
+}
+
 func DoRequest[T any](
 	t *testing.T,
 	server http.Handler,
 	method string,
-	path string,
+	filepath string,
 	input any,
 	options ...requestOption,
 ) (*httptest.ResponseRecorder, T) {
-	reqBody, err := json.Marshal(input)
-	require.NoError(t, err)
+	var reqBody io.Reader
 
-	req := httptest.NewRequest(method, path, bytes.NewBuffer(reqBody))
+	if multipartInput, ok := input.(*bytes.Buffer); ok {
+		reqBody = multipartInput
+	} else {
+		reqBodyBytes, err := json.Marshal(input)
+		require.NoError(t, err)
+		reqBody = bytes.NewBuffer(reqBodyBytes)
+	}
+
+	req := httptest.NewRequest(method, filepath, reqBody)
 	for _, opt := range options {
 		require.NoError(t, opt(req))
 	}
@@ -76,4 +92,24 @@ func DoRequest[T any](
 	}
 
 	return res, resBody
+}
+
+func CreateMultipart(t *testing.T, filepath, content string) (*bytes.Buffer, string) {
+	buf := &bytes.Buffer{}
+	mpw := multipart.NewWriter(buf)
+
+	filename := path.Base(filepath)
+	fileWriter, err := mpw.CreateFormFile("file", filename)
+	assert.NoError(t, err)
+	_, err = fileWriter.Write([]byte(content))
+	assert.NoError(t, err)
+
+	pathWriter, err := mpw.CreateFormField("path")
+	assert.NoError(t, err)
+	_, err = pathWriter.Write([]byte(filepath))
+	assert.NoError(t, err)
+
+	assert.NoError(t, mpw.Close())
+
+	return buf, mpw.FormDataContentType()
 }

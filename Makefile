@@ -8,7 +8,7 @@ editor:
 
 .PHONY: test
 test:
-	go test ./... -count 1 -race
+	go test ./... -count 1 -race -timeout 30s
 
 .PHONY: lint
 lint:

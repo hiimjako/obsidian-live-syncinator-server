@@ -21,7 +21,14 @@ const (
 )
 
 type Options struct {
-	JWTSecret []byte
+	JWTSecret   []byte
+	MaxFileSize int64
+}
+
+func (o *Options) Default() {
+	if o.MaxFileSize <= 0 {
+		o.MaxFileSize = 10 << 20 // 10 MB
+	}
 }
 
 type realTimeSyncServer struct {
@@ -29,7 +36,8 @@ type realTimeSyncServer struct {
 	cancel context.CancelFunc
 	mut    sync.Mutex
 
-	jwtSecret []byte
+	jwtSecret   []byte
+	maxFileSize int64
 
 	publishLimiter *rate.Limiter
 	serverMux      *http.ServeMux
@@ -43,12 +51,15 @@ type realTimeSyncServer struct {
 }
 
 func New(db *repository.Queries, s filestorage.Storage, opts Options) *realTimeSyncServer {
+	opts.Default()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	rts := &realTimeSyncServer{
 		ctx:    ctx,
 		cancel: cancel,
 
-		jwtSecret: opts.JWTSecret,
+		jwtSecret:   opts.JWTSecret,
+		maxFileSize: opts.MaxFileSize,
 
 		serverMux:      http.NewServeMux(),
 		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),

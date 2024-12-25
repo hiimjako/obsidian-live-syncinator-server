@@ -1,8 +1,10 @@
 package filestorage
 
 import (
+	"bytes"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/diff"
@@ -41,7 +43,7 @@ func TestPersistChunk(t *testing.T) {
 		d := NewDisk(dir)
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				filePath, err := d.CreateObject([]byte(""))
+				filePath, err := d.CreateObject(strings.NewReader(""))
 				assert.NoError(t, err)
 				for _, di := range tt.diffs {
 					for _, d2 := range di {
@@ -71,7 +73,7 @@ func TestDisk(t *testing.T) {
 
 	// create object
 	content := []byte("bar")
-	p, err := d.CreateObject(content)
+	p, err := d.CreateObject(bytes.NewReader(content))
 	assert.NoError(t, err)
 
 	// read object

@@ -22,7 +22,7 @@ func NewDisk(basepath string) Disk {
 	}
 }
 
-func (d Disk) CreateObject(content []byte) (string, error) {
+func (d Disk) CreateObject(file io.Reader) (string, error) {
 	id := uuid.New().String()
 	relativePath := path.Join(strings.Split(id, "-")...)
 	diskPath := path.Join(d.basepath, relativePath)
@@ -37,15 +37,15 @@ func (d Disk) CreateObject(content []byte) (string, error) {
 		return "", err
 	}
 
-	file, err := os.Create(diskPath)
+	dst, err := os.Create(diskPath)
 	if err != nil {
 		return "", nil
 	}
-	defer file.Close()
+	defer dst.Close()
 
-	_, err = file.Write(content)
+	_, err = io.Copy(dst, file)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	return relativePath, nil

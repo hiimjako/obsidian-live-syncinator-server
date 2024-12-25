@@ -1,6 +1,7 @@
 package rtsync
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -26,10 +27,10 @@ func TestNew(t *testing.T) {
 	require.NoError(t, err)
 
 	fileContent := []byte("hello world!")
-	mockFileStorage.On("CreateObject", fileContent).Return(file.DiskPath, nil)
+	mockFileStorage.On("CreateObject", bytes.NewReader(fileContent)).Return(file.DiskPath, nil)
 	mockFileStorage.On("ReadObject", file.DiskPath).Return(fileContent, nil)
 
-	_, err = mockFileStorage.CreateObject(fileContent)
+	_, err = mockFileStorage.CreateObject(bytes.NewReader(fileContent))
 	require.NoError(t, err)
 
 	var server *realTimeSyncServer
