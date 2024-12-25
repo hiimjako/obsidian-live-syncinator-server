@@ -30,7 +30,7 @@ func (rts *realTimeSyncServer) authHandler() http.Handler {
 	stack := middleware.CreateStack(
 		middleware.Logging,
 		middleware.Cors(middleware.CorsOptions{
-			AllowedOrigins: []string{"127.0.0.1", "app://obsidian.md"},
+			AllowedOrigins: []string{"*"},
 			AllowedMethods: []string{"HEAD", "GET", "POST", "OPTIONS", "DELETE"},
 			AllowedHeaders: []string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Authorization"},
 		}),
