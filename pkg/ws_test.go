@@ -9,10 +9,10 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/testutils"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/diff"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/filestorage"
+	"github.com/hiimjako/syncinator/internal/repository"
+	"github.com/hiimjako/syncinator/internal/testutils"
+	"github.com/hiimjako/syncinator/pkg/diff"
+	"github.com/hiimjako/syncinator/pkg/filestorage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

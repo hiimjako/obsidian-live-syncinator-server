@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
+	"github.com/hiimjako/syncinator/internal/repository"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 )

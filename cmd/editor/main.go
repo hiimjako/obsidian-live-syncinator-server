@@ -12,9 +12,9 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/gdamore/tcell/v2"
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/screen"
-	rtsync "github.com/hiimjako/real-time-sync-obsidian-be/pkg"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/diff"
+	"github.com/hiimjako/syncinator/internal/screen"
+	rtsync "github.com/hiimjako/syncinator/pkg"
+	"github.com/hiimjako/syncinator/pkg/diff"
 )
 
 var (

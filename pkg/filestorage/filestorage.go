@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"io"
 
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/diff"
+	"github.com/hiimjako/syncinator/pkg/diff"
 )
 
 type Storage interface {

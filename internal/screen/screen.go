@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/diff"
+	"github.com/hiimjako/syncinator/pkg/diff"
 )
 
 const (

@@ -10,10 +10,10 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/requestutils"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/filestorage"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/middleware"
+	"github.com/hiimjako/syncinator/internal/repository"
+	"github.com/hiimjako/syncinator/internal/requestutils"
+	"github.com/hiimjako/syncinator/pkg/filestorage"
+	"github.com/hiimjako/syncinator/pkg/middleware"
 )
 
 const (
@@ -32,13 +32,13 @@ const (
 	ErrNotExistingFile = "not existing file"
 )
 
-func (rts *realTimeSyncServer) apiHandler() http.Handler {
+func (s *syncinator) apiHandler() http.Handler {
 	router := http.NewServeMux()
-	router.HandleFunc("GET /file", rts.listFilesHandler)
-	router.HandleFunc("GET /file/{id}", rts.fetchFileHandler)
-	router.HandleFunc("POST /file", rts.createFileHandler)
-	router.HandleFunc("DELETE /file/{id}", rts.deleteFileHandler)
-	router.HandleFunc("PATCH /file/{id}", rts.updateFileHandler)
+	router.HandleFunc("GET /file", s.listFilesHandler)
+	router.HandleFunc("GET /file/{id}", s.fetchFileHandler)
+	router.HandleFunc("POST /file", s.createFileHandler)
+	router.HandleFunc("DELETE /file/{id}", s.deleteFileHandler)
+	router.HandleFunc("PATCH /file/{id}", s.updateFileHandler)
 
 	stack := middleware.CreateStack(
 		middleware.Logging,
@@ -47,17 +47,17 @@ func (rts *realTimeSyncServer) apiHandler() http.Handler {
 			AllowedMethods: []string{"HEAD", "GET", "POST", "OPTIONS", "DELETE", "PATCH"},
 			AllowedHeaders: []string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Authorization"},
 		}),
-		middleware.IsAuthenticated(middleware.AuthOptions{SecretKey: rts.jwtSecret}),
+		middleware.IsAuthenticated(middleware.AuthOptions{SecretKey: s.jwtSecret}),
 	)
 
 	routerWithStack := stack(router)
 	return routerWithStack
 }
 
-func (rts *realTimeSyncServer) listFilesHandler(w http.ResponseWriter, r *http.Request) {
+func (s *syncinator) listFilesHandler(w http.ResponseWriter, r *http.Request) {
 	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
 
-	files, err := rts.db.FetchFiles(r.Context(), workspaceID)
+	files, err := s.db.FetchFiles(r.Context(), workspaceID)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -71,7 +71,7 @@ func (rts *realTimeSyncServer) listFilesHandler(w http.ResponseWriter, r *http.R
 	}
 }
 
-func (rts *realTimeSyncServer) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
+func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 	fileId, err := strconv.Atoi(r.PathValue("id"))
 
 	if fileId == 0 || err != nil {
@@ -79,7 +79,7 @@ func (rts *realTimeSyncServer) fetchFileHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	file, err := rts.db.FetchFile(r.Context(), int64(fileId))
+	file, err := s.db.FetchFile(r.Context(), int64(fileId))
 	if err != nil {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return
@@ -106,7 +106,7 @@ func (rts *realTimeSyncServer) fetchFileHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	fileContent, err := rts.storage.ReadObject(file.DiskPath)
+	fileContent, err := s.storage.ReadObject(file.DiskPath)
 	if err != nil {
 		http.Error(w, ErrReadingFile, http.StatusInternalServerError)
 		return
@@ -132,14 +132,14 @@ func (rts *realTimeSyncServer) fetchFileHandler(w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusOK)
 }
 
-func (rts *realTimeSyncServer) createFileHandler(w http.ResponseWriter, r *http.Request) {
+func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 	if !requestutils.IsMultipartFormData(r) {
 		errMsg := fmt.Sprintf("Unsupported Content-Type %q", r.Header.Get("Content-Type"))
 		http.Error(w, errMsg, http.StatusUnsupportedMediaType)
 		return
 	}
 
-	err := r.ParseMultipartForm(rts.maxFileSize)
+	err := r.ParseMultipartForm(s.maxFileSize)
 	if err != nil {
 		http.Error(w, "Unable to parse form", http.StatusBadRequest)
 		return
@@ -155,13 +155,13 @@ func (rts *realTimeSyncServer) createFileHandler(w http.ResponseWriter, r *http.
 	filepath := r.FormValue(MultipartFilepathField)
 
 	// if there isn't any file an error is returned
-	_, err = rts.db.FetchFileFromWorkspacePath(r.Context(), filepath)
+	_, err = s.db.FetchFileFromWorkspacePath(r.Context(), filepath)
 	if err == nil {
 		http.Error(w, ErrDuplicateFile, http.StatusConflict)
 		return
 	}
 
-	diskPath, err := rts.storage.CreateObject(file)
+	diskPath, err := s.storage.CreateObject(file)
 	if err != nil {
 		http.Error(w, ErrInvalidFile, http.StatusInternalServerError)
 		return
@@ -171,7 +171,7 @@ func (rts *realTimeSyncServer) createFileHandler(w http.ResponseWriter, r *http.
 	hash := filestorage.GenerateHash(file)
 	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
 
-	dbFile, err := rts.db.CreateFile(r.Context(), repository.CreateFileParams{
+	dbFile, err := s.db.CreateFile(r.Context(), repository.CreateFileParams{
 		DiskPath:      diskPath,
 		WorkspacePath: filepath,
 		MimeType:      mimeType,
@@ -192,7 +192,7 @@ func (rts *realTimeSyncServer) createFileHandler(w http.ResponseWriter, r *http.
 	}
 }
 
-func (rts *realTimeSyncServer) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
+func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 	fileId, err := strconv.Atoi(r.PathValue("id"))
 
 	if fileId == 0 || err != nil {
@@ -200,7 +200,7 @@ func (rts *realTimeSyncServer) deleteFileHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	file, err := rts.db.FetchFile(r.Context(), int64(fileId))
+	file, err := s.db.FetchFile(r.Context(), int64(fileId))
 	if err != nil {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return
@@ -212,12 +212,12 @@ func (rts *realTimeSyncServer) deleteFileHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if err := rts.storage.DeleteObject(file.DiskPath); err != nil {
+	if err := s.storage.DeleteObject(file.DiskPath); err != nil {
 		http.Error(w, ErrNotExistingFile, http.StatusInternalServerError)
 		return
 	}
 
-	err = rts.db.DeleteFile(r.Context(), int64(fileId))
+	err = s.db.DeleteFile(r.Context(), int64(fileId))
 	if err != nil {
 		http.Error(w, ErrInvalidFile, http.StatusInternalServerError)
 		return
@@ -226,7 +226,7 @@ func (rts *realTimeSyncServer) deleteFileHandler(w http.ResponseWriter, r *http.
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (rts *realTimeSyncServer) updateFileHandler(w http.ResponseWriter, r *http.Request) {
+func (s *syncinator) updateFileHandler(w http.ResponseWriter, r *http.Request) {
 	fileId, err := strconv.Atoi(r.PathValue("id"))
 
 	if fileId == 0 || err != nil {
@@ -251,7 +251,7 @@ func (rts *realTimeSyncServer) updateFileHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	file, err := rts.db.FetchFile(r.Context(), int64(fileId))
+	file, err := s.db.FetchFile(r.Context(), int64(fileId))
 	if err != nil {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return
@@ -263,7 +263,7 @@ func (rts *realTimeSyncServer) updateFileHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	err = rts.db.UpdateWorkspacePath(r.Context(), repository.UpdateWorkspacePathParams{
+	err = s.db.UpdateWorkspacePath(r.Context(), repository.UpdateWorkspacePathParams{
 		WorkspacePath: data.Path,
 		ID:            file.ID,
 	})

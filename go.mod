@@ -1,4 +1,4 @@
-module github.com/hiimjako/real-time-sync-obsidian-be
+module github.com/hiimjako/syncinator
 
 go 1.23.2
 

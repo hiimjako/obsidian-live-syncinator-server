@@ -11,11 +11,11 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/env"
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/migration"
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
-	rtsync "github.com/hiimjako/real-time-sync-obsidian-be/pkg"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/filestorage"
+	"github.com/hiimjako/syncinator/internal/env"
+	"github.com/hiimjako/syncinator/internal/migration"
+	"github.com/hiimjako/syncinator/internal/repository"
+	rtsync "github.com/hiimjako/syncinator/pkg"
+	"github.com/hiimjako/syncinator/pkg/filestorage"
 
 	_ "github.com/mattn/go-sqlite3"
 )

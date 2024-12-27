@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/filestorage"
+	"github.com/hiimjako/syncinator/internal/repository"
+	"github.com/hiimjako/syncinator/pkg/filestorage"
 	"golang.org/x/time/rate"
 )
 
@@ -37,7 +37,7 @@ type CachedFile struct {
 	Content string
 }
 
-type realTimeSyncServer struct {
+type syncinator struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	mut    sync.Mutex
@@ -56,11 +56,11 @@ type realTimeSyncServer struct {
 	db             *repository.Queries
 }
 
-func New(db *repository.Queries, s filestorage.Storage, opts Options) *realTimeSyncServer {
+func New(db *repository.Queries, fs filestorage.Storage, opts Options) *syncinator {
 	opts.Default()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	rts := &realTimeSyncServer{
+	s := &syncinator{
 		ctx:    ctx,
 		cancel: cancel,
 
@@ -73,29 +73,29 @@ func New(db *repository.Queries, s filestorage.Storage, opts Options) *realTimeS
 		files:          make(map[int64]CachedFile),
 		storageQueue:   make(chan ChunkMessage, 128),
 		eventQueue:     make(chan EventMessage, 128),
-		storage:        s,
+		storage:        fs,
 		db:             db,
 	}
 
-	rts.init()
+	s.init()
 
-	rts.serverMux.Handle(PathHttpApi+"/", http.StripPrefix(PathHttpApi, rts.apiHandler()))
-	rts.serverMux.Handle(PathHttpAuth+"/", http.StripPrefix(PathHttpAuth, rts.authHandler()))
-	rts.serverMux.HandleFunc(PathWebSocket, rts.wsHandler)
+	s.serverMux.Handle(PathHttpApi+"/", http.StripPrefix(PathHttpApi, s.apiHandler()))
+	s.serverMux.Handle(PathHttpAuth+"/", http.StripPrefix(PathHttpAuth, s.authHandler()))
+	s.serverMux.HandleFunc(PathWebSocket, s.wsHandler)
 
-	go rts.internalBusProcessor()
+	go s.internalBusProcessor()
 
-	return rts
+	return s
 }
 
-func (rts *realTimeSyncServer) init() {
-	files, err := rts.db.FetchAllTextFiles(rts.ctx)
+func (s *syncinator) init() {
+	files, err := s.db.FetchAllTextFiles(s.ctx)
 	if err != nil {
 		log.Panicf("error while fetching all files, %v\n", err)
 	}
 
 	for _, file := range files {
-		fileReader, err := rts.storage.ReadObject(file.DiskPath)
+		fileReader, err := s.storage.ReadObject(file.DiskPath)
 		if err != nil {
 			log.Panicf("error while reading file, %v\n", err)
 		}
@@ -106,20 +106,20 @@ func (rts *realTimeSyncServer) init() {
 		}
 		fileReader.Close()
 
-		rts.files[file.ID] = CachedFile{
+		s.files[file.ID] = CachedFile{
 			File:    file,
 			Content: string(fileContent),
 		}
 	}
 }
 
-func (rts *realTimeSyncServer) Close() error {
-	if rts.ctx.Err() != nil {
-		rts.cancel()
+func (s *syncinator) Close() error {
+	if s.ctx.Err() != nil {
+		s.cancel()
 	}
 	return nil
 }
 
-func (rts *realTimeSyncServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rts.serverMux.ServeHTTP(w, r)
+func (s *syncinator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.serverMux.ServeHTTP(w, r)
 }

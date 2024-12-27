@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/coder/websocket"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/diff"
+	"github.com/hiimjako/syncinator/pkg/diff"
 )
 
 type MessageType = int
@@ -36,8 +36,8 @@ type ChunkMessage struct {
 	Chunks []diff.DiffChunk `json:"chunks"`
 }
 
-func (rts *realTimeSyncServer) wsHandler(w http.ResponseWriter, r *http.Request) {
-	err := rts.subscribe(w, r)
+func (s *syncinator) wsHandler(w http.ResponseWriter, r *http.Request) {
+	err := s.subscribe(w, r)
 	if errors.Is(err, context.Canceled) {
 		return
 	}
@@ -51,29 +51,29 @@ func (rts *realTimeSyncServer) wsHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (rts *realTimeSyncServer) subscribe(w http.ResponseWriter, r *http.Request) error {
-	s, err := NewSubscriber(rts.ctx, w, r, rts.onChunkMessage, rts.onEventMessage)
+func (s *syncinator) subscribe(w http.ResponseWriter, r *http.Request) error {
+	sub, err := NewSubscriber(s.ctx, w, r, s.onChunkMessage, s.onEventMessage)
 	if err != nil {
 		return err
 	}
 
-	rts.addSubscriber(s)
-	defer rts.deleteSubscriber(s)
+	s.addSubscriber(sub)
+	defer s.deleteSubscriber(sub)
 
-	s.Listen()
+	sub.Listen()
 
 	return nil
 }
 
-func (rts *realTimeSyncServer) onEventMessage(event EventMessage) {
-	rts.broadcastEventMessage(event)
+func (s *syncinator) onEventMessage(event EventMessage) {
+	s.broadcastEventMessage(event)
 }
 
-func (rts *realTimeSyncServer) onChunkMessage(data ChunkMessage) {
-	rts.mut.Lock()
-	defer rts.mut.Unlock()
+func (s *syncinator) onChunkMessage(data ChunkMessage) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 
-	file := rts.files[data.FileId]
+	file := s.files[data.FileId]
 	localCopy := file.Content
 	for _, d := range data.Chunks {
 		localCopy = diff.ApplyDiff(localCopy, d)
@@ -81,11 +81,11 @@ func (rts *realTimeSyncServer) onChunkMessage(data ChunkMessage) {
 	diffs := diff.ComputeDiff(file.Content, localCopy)
 
 	file.Content = localCopy
-	rts.files[data.FileId] = file
+	s.files[data.FileId] = file
 
 	if len(diffs) > 0 {
-		rts.storageQueue <- data
-		rts.broadcastChunkMessage(ChunkMessage{
+		s.storageQueue <- data
+		s.broadcastChunkMessage(ChunkMessage{
 			WsMessageHeader: data.WsMessageHeader,
 			Chunks:          diffs,
 		})
@@ -95,16 +95,16 @@ func (rts *realTimeSyncServer) onChunkMessage(data ChunkMessage) {
 // broadcastPublish publishes the msg to all subscribers.
 // It never blocks and so messages to slow subscribers
 // are dropped.
-func (rts *realTimeSyncServer) broadcastChunkMessage(msg ChunkMessage) {
-	rts.subscribersMu.Lock()
-	defer rts.subscribersMu.Unlock()
+func (s *syncinator) broadcastChunkMessage(msg ChunkMessage) {
+	s.subscribersMu.Lock()
+	defer s.subscribersMu.Unlock()
 
-	err := rts.publishLimiter.Wait(context.Background())
+	err := s.publishLimiter.Wait(context.Background())
 	if err != nil {
 		log.Print(err)
 	}
 
-	for s := range rts.subscribers {
+	for s := range s.subscribers {
 		select {
 		case s.chunkMsgQueue <- msg:
 		default:
@@ -113,16 +113,16 @@ func (rts *realTimeSyncServer) broadcastChunkMessage(msg ChunkMessage) {
 	}
 }
 
-func (rts *realTimeSyncServer) broadcastEventMessage(msg EventMessage) {
-	rts.subscribersMu.Lock()
-	defer rts.subscribersMu.Unlock()
+func (s *syncinator) broadcastEventMessage(msg EventMessage) {
+	s.subscribersMu.Lock()
+	defer s.subscribersMu.Unlock()
 
-	err := rts.publishLimiter.Wait(context.Background())
+	err := s.publishLimiter.Wait(context.Background())
 	if err != nil {
 		log.Print(err)
 	}
 
-	for s := range rts.subscribers {
+	for s := range s.subscribers {
 		select {
 		case s.eventMsgQueue <- msg:
 		default:
@@ -131,44 +131,44 @@ func (rts *realTimeSyncServer) broadcastEventMessage(msg EventMessage) {
 	}
 }
 
-func (rts *realTimeSyncServer) internalBusProcessor() {
+func (s *syncinator) internalBusProcessor() {
 	for {
 		select {
-		case chunkMsg := <-rts.storageQueue:
+		case chunkMsg := <-s.storageQueue:
 			for _, d := range chunkMsg.Chunks {
-				file, err := rts.db.FetchFile(context.Background(), chunkMsg.FileId)
+				file, err := s.db.FetchFile(context.Background(), chunkMsg.FileId)
 				if err != nil {
 					log.Println(err)
 					return
 				}
 
-				err = rts.storage.PersistChunk(file.DiskPath, d)
+				err = s.storage.PersistChunk(file.DiskPath, d)
 				if err != nil {
 					log.Println(err)
 				}
 
-				err = rts.db.UpdateUpdatedAt(context.Background(), chunkMsg.FileId)
+				err = s.db.UpdateUpdatedAt(context.Background(), chunkMsg.FileId)
 				if err != nil {
 					log.Println(err)
 				}
 			}
-		case event := <-rts.eventQueue:
-			rts.broadcastEventMessage(event)
-		case <-rts.ctx.Done():
+		case event := <-s.eventQueue:
+			s.broadcastEventMessage(event)
+		case <-s.ctx.Done():
 			return
 		}
 	}
 }
 
-func (rts *realTimeSyncServer) addSubscriber(s *subscriber) {
-	rts.subscribersMu.Lock()
-	rts.subscribers[s] = struct{}{}
-	rts.subscribersMu.Unlock()
+func (s *syncinator) addSubscriber(sub *subscriber) {
+	s.subscribersMu.Lock()
+	s.subscribers[sub] = struct{}{}
+	s.subscribersMu.Unlock()
 }
 
 // deleteSubscriber deletes the given subscriber.
-func (rts *realTimeSyncServer) deleteSubscriber(s *subscriber) {
-	rts.subscribersMu.Lock()
-	delete(rts.subscribers, s)
-	rts.subscribersMu.Unlock()
+func (s *syncinator) deleteSubscriber(sub *subscriber) {
+	s.subscribersMu.Lock()
+	delete(s.subscribers, sub)
+	s.subscribersMu.Unlock()
 }

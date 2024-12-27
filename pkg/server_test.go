@@ -5,9 +5,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/testutils"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/filestorage"
+	"github.com/hiimjako/syncinator/internal/repository"
+	"github.com/hiimjako/syncinator/internal/testutils"
+	"github.com/hiimjako/syncinator/pkg/filestorage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -42,7 +42,7 @@ func TestNew(t *testing.T) {
 	_, err = mockFileStorage.CreateObject(bytes.NewReader(fileContent))
 	require.NoError(t, err)
 
-	var server *realTimeSyncServer
+	var server *syncinator
 	require.NotPanics(t, func() {
 		options := Options{JWTSecret: []byte("secret")}
 		server = New(repo, mockFileStorage, options)

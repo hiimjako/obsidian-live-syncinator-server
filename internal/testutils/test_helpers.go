@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/migration"
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/middleware"
+	"github.com/hiimjako/syncinator/internal/migration"
+	"github.com/hiimjako/syncinator/internal/repository"
+	"github.com/hiimjako/syncinator/pkg/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

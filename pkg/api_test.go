@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
-	"github.com/hiimjako/real-time-sync-obsidian-be/internal/testutils"
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/filestorage"
+	"github.com/hiimjako/syncinator/internal/repository"
+	"github.com/hiimjako/syncinator/internal/testutils"
+	"github.com/hiimjako/syncinator/pkg/filestorage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 

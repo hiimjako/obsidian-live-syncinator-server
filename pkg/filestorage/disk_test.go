@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/diff"
+	"github.com/hiimjako/syncinator/pkg/diff"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

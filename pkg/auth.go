@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/middleware"
+	"github.com/hiimjako/syncinator/pkg/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -23,9 +23,9 @@ const (
 	ErrWorkspaceNotFound = "workspace not found"
 )
 
-func (rts *realTimeSyncServer) authHandler() http.Handler {
+func (s *syncinator) authHandler() http.Handler {
 	router := http.NewServeMux()
-	router.HandleFunc("POST /login", rts.fetchWorkspaceHandler)
+	router.HandleFunc("POST /login", s.fetchWorkspaceHandler)
 
 	stack := middleware.CreateStack(
 		middleware.Logging,
@@ -40,7 +40,7 @@ func (rts *realTimeSyncServer) authHandler() http.Handler {
 	return routerWithStack
 }
 
-func (rts *realTimeSyncServer) fetchWorkspaceHandler(w http.ResponseWriter, r *http.Request) {
+func (s *syncinator) fetchWorkspaceHandler(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "error reading request body", http.StatusInternalServerError)
@@ -53,7 +53,7 @@ func (rts *realTimeSyncServer) fetchWorkspaceHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	workspace, err := rts.db.FetchWorkspace(r.Context(), data.Name)
+	workspace, err := s.db.FetchWorkspace(r.Context(), data.Name)
 	if err != nil {
 		http.Error(w, ErrWorkspaceNotFound, http.StatusNotFound)
 		return
@@ -64,7 +64,7 @@ func (rts *realTimeSyncServer) fetchWorkspaceHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	token, err := middleware.CreateToken(middleware.AuthOptions{SecretKey: rts.jwtSecret}, workspace.ID)
+	token, err := middleware.CreateToken(middleware.AuthOptions{SecretKey: s.jwtSecret}, workspace.ID)
 	if err != nil {
 		http.Error(w, "error while creating auth token", http.StatusInternalServerError)
 		return
