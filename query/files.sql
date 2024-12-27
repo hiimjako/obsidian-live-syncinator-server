@@ -23,6 +23,11 @@ WHERE workspace_id = ?;
 SELECT *
 FROM files;
 
+-- name: FetchAllTextFiles :many
+SELECT *
+FROM files
+WHERE mime_type LIKE 'text/%';
+
 -- name: DeleteFile :exec
 DELETE FROM files
 WHERE id = ?;

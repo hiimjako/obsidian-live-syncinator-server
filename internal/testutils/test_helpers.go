@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/hiimjako/real-time-sync-obsidian-be/internal/migration"
+	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
 	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,6 +49,11 @@ func WithContentTypeHeader(contentType string) requestOption {
 	}
 }
 
+type FileWithContent struct {
+	Metadata repository.File
+	Content  []byte
+}
+
 func DoRequest[T any](
 	t *testing.T,
 	server http.Handler,
@@ -79,16 +85,51 @@ func DoRequest[T any](
 	body, err := io.ReadAll(res.Body)
 	require.NoError(t, err)
 
-	// If T is string, return the body as a string
-	if str, ok := any(&resBody).(*string); ok {
-		if body == nil {
-			*str = ""
+	contentType := res.Header().Get("Content-Type")
+	if strings.HasPrefix(contentType, "multipart/mixed") {
+		// Parse multipart/mixed response
+		boundary := contentType[len("multipart/mixed; boundary="):]
+		reader := multipart.NewReader(bytes.NewReader(body), boundary)
+
+		// Decode multipart parts into FileWithContent
+		var fileWithContent FileWithContent
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+
+			contentType := part.Header.Get("Content-Type")
+			partBody, err := io.ReadAll(part)
+			require.NoError(t, err)
+
+			switch contentType {
+			case "application/json":
+				err := json.Unmarshal(partBody, &fileWithContent.Metadata)
+				require.NoError(t, err)
+			default:
+				fileWithContent.Content = partBody
+			}
+		}
+
+		if result, ok := any(&resBody).(*FileWithContent); ok {
+			*result = fileWithContent
 		} else {
-			*str = strings.Trim(string(body), "\n")
+			require.Fail(t, "Unsupported type for multipart/mixed response decoding")
 		}
 	} else {
-		err = json.Unmarshal(body, &resBody)
-		assert.NoError(t, err)
+		// Handle non-multipart response
+		if str, ok := any(&resBody).(*string); ok {
+			if body == nil {
+				*str = ""
+			} else {
+				*str = strings.Trim(string(body), "\n")
+			}
+		} else {
+			err = json.Unmarshal(body, &resBody)
+			assert.NoError(t, err)
+		}
 	}
 
 	return res, resBody

@@ -64,10 +64,10 @@ func (d Disk) DeleteObject(relativePath string) error {
 	return err
 }
 
-func (d Disk) ReadObject(relativePath string) ([]byte, error) {
+func (d Disk) ReadObject(relativePath string) (io.ReadCloser, error) {
 	diskPath := path.Join(d.basepath, relativePath)
 
-	return os.ReadFile(diskPath)
+	return os.Open(diskPath)
 }
 
 func (d Disk) PersistChunk(relativePath string, chunk diff.DiffChunk) error {

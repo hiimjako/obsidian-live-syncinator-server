@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
+	"path"
 	"strconv"
 
 	"github.com/hiimjako/real-time-sync-obsidian-be/internal/repository"
@@ -20,11 +23,6 @@ const (
 
 type UpdateFileBody struct {
 	Path string `json:"path"`
-}
-
-type FileWithContent struct {
-	repository.File
-	Content string `json:"content"`
 }
 
 const (
@@ -93,23 +91,45 @@ func (rts *realTimeSyncServer) fetchFileHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	mw := multipart.NewWriter(w)
+	defer mw.Close()
+
+	metaPart, err := mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type": []string{"application/json"},
+	})
+	if err != nil {
+		http.Error(w, "Error creating metadata part", http.StatusInternalServerError)
+		return
+	}
+	if err := json.NewEncoder(metaPart).Encode(file); err != nil {
+		http.Error(w, "error creating JSON part", http.StatusInternalServerError)
+		return
+	}
+
 	fileContent, err := rts.storage.ReadObject(file.DiskPath)
 	if err != nil {
 		http.Error(w, ErrReadingFile, http.StatusInternalServerError)
 		return
 	}
+	defer fileContent.Close()
 
-	fileWithContent := FileWithContent{
-		File:    file,
-		Content: string(fileContent),
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(fileWithContent); err != nil {
-		http.Error(w, "error reading request body", http.StatusInternalServerError)
+	filename := path.Base(file.WorkspacePath)
+	filePart, err := mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type":        []string{"application/octet-stream"},
+		"Content-Disposition": []string{fmt.Sprintf(`attachment; filename=%q`, filename)},
+	})
+	if err != nil {
+		http.Error(w, "Error creating file part", http.StatusInternalServerError)
 		return
 	}
+	_, err = io.Copy(filePart, fileContent)
+	if err != nil {
+		http.Error(w, "Error streaming file content", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "multipart/mixed; boundary="+mw.Boundary())
+	w.WriteHeader(http.StatusOK)
 }
 
 func (rts *realTimeSyncServer) createFileHandler(w http.ResponseWriter, r *http.Request) {

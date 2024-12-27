@@ -14,14 +14,9 @@ func IsMultipartFormData(r *http.Request) bool {
 	return mediaType == "multipart/form-data" || mediaType == "multipart/mixed"
 }
 
-type File interface {
-	io.Reader
-	io.Seeker
-}
-
 // DetectFileMimeType detects the MIME type of the file based on its content.
 // If it cannot determine a more specific one, it returns "application/octet-stream".
-func DetectFileMimeType(file File) string {
+func DetectFileMimeType(file io.ReadSeeker) string {
 	const defaultContentType = "application/octet-stream"
 
 	// Use mime.TypeByExtension as a fallback for file extension MIME type

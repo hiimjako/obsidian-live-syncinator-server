@@ -2,6 +2,7 @@ package rtsync
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -31,6 +32,11 @@ func (o *Options) Default() {
 	}
 }
 
+type CachedFile struct {
+	repository.File
+	Content string
+}
+
 type realTimeSyncServer struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -43,7 +49,7 @@ type realTimeSyncServer struct {
 	serverMux      *http.ServeMux
 	subscribersMu  sync.Mutex
 	subscribers    map[*subscriber]struct{}
-	files          map[int64]FileWithContent
+	files          map[int64]CachedFile
 	storageQueue   chan ChunkMessage
 	eventQueue     chan EventMessage
 	storage        filestorage.Storage
@@ -64,7 +70,7 @@ func New(db *repository.Queries, s filestorage.Storage, opts Options) *realTimeS
 		serverMux:      http.NewServeMux(),
 		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),
 		subscribers:    make(map[*subscriber]struct{}),
-		files:          make(map[int64]FileWithContent),
+		files:          make(map[int64]CachedFile),
 		storageQueue:   make(chan ChunkMessage, 128),
 		eventQueue:     make(chan EventMessage, 128),
 		storage:        s,
@@ -83,20 +89,26 @@ func New(db *repository.Queries, s filestorage.Storage, opts Options) *realTimeS
 }
 
 func (rts *realTimeSyncServer) init() {
-	files, err := rts.db.FetchAllFiles(rts.ctx)
+	files, err := rts.db.FetchAllTextFiles(rts.ctx)
 	if err != nil {
 		log.Panicf("error while fetching all files, %v\n", err)
 	}
 
 	for _, file := range files {
-		content, err := rts.storage.ReadObject(file.DiskPath)
+		fileReader, err := rts.storage.ReadObject(file.DiskPath)
 		if err != nil {
 			log.Panicf("error while reading file, %v\n", err)
 		}
 
-		rts.files[file.ID] = FileWithContent{
+		fileContent, err := io.ReadAll(fileReader)
+		if err != nil {
+			log.Panicf("error while reading file, %v\n", err)
+		}
+		fileReader.Close()
+
+		rts.files[file.ID] = CachedFile{
 			File:    file,
-			Content: string(content),
+			Content: string(fileContent),
 		}
 	}
 }

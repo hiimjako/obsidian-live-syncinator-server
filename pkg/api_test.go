@@ -139,7 +139,7 @@ func Test_fetchFileHandler(t *testing.T) {
 	// fetch file
 	mockFileStorage.On("ReadObject", filesToInsert[1].filepath).Return([]byte(filesToInsert[1].file), nil)
 
-	res, body := testutils.DoRequest[FileWithContent](
+	res, body := testutils.DoRequest[testutils.FileWithContent](
 		t,
 		server,
 		http.MethodGet,
@@ -148,18 +148,18 @@ func Test_fetchFileHandler(t *testing.T) {
 		testutils.WithAuthHeader(options.JWTSecret, workspaceID),
 	)
 	assert.Equal(t, http.StatusOK, res.Code)
-	assert.Equal(t, FileWithContent{
-		File: repository.File{
+	assert.Equal(t, testutils.FileWithContent{
+		Metadata: repository.File{
 			ID:            2,
 			DiskPath:      "/home/file/2",
 			WorkspacePath: "/home/file/2",
 			MimeType:      "text/plain; charset=utf-8",
-			Hash:          body.Hash,
-			CreatedAt:     body.CreatedAt,
-			UpdatedAt:     body.UpdatedAt,
+			Hash:          body.Metadata.Hash,
+			CreatedAt:     body.Metadata.CreatedAt,
+			UpdatedAt:     body.Metadata.UpdatedAt,
 			WorkspaceID:   workspaceID,
 		},
-		Content: "here a new file 2!",
+		Content: []byte("here a new file 2!"),
 	}, body)
 
 	// check mock assertions

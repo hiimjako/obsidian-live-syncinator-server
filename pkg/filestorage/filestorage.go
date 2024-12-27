@@ -17,7 +17,7 @@ type Storage interface {
 	// DeleteObject deletes an object
 	DeleteObject(string) error
 	// ReadObject reads an object
-	ReadObject(string) ([]byte, error)
+	ReadObject(string) (io.ReadCloser, error)
 }
 
 func GenerateHash(file io.Reader) string {

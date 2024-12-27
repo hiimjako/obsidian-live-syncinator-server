@@ -1,6 +1,8 @@
 package filestorage
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 
 	"github.com/hiimjako/real-time-sync-obsidian-be/pkg/diff"
@@ -26,7 +28,13 @@ func (m *MockFileStorage) DeleteObject(p string) error {
 	return args.Error(0)
 }
 
-func (m *MockFileStorage) ReadObject(p string) ([]byte, error) {
+func (m *MockFileStorage) ReadObject(p string) (io.ReadCloser, error) {
 	args := m.Called(p)
-	return args.Get(0).([]byte), args.Error(1)
+
+	// Ensure the first return value is an io.ReadCloser
+	data, ok := args.Get(0).([]byte)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for mock return value: %T", args.Get(0))
+	}
+	return io.NopCloser(bytes.NewReader(data)), args.Error(1)
 }

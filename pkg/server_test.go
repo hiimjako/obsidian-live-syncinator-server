@@ -26,6 +26,15 @@ func TestNew(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	_, err = repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath:      "disk_path/image_to_not_load",
+		WorkspacePath: "workspace_path/image_to_not_load",
+		MimeType:      "image/png",
+		Hash:          "123",
+		WorkspaceID:   1,
+	})
+	require.NoError(t, err)
+
 	fileContent := []byte("hello world!")
 	mockFileStorage.On("CreateObject", bytes.NewReader(fileContent)).Return(file.DiskPath, nil)
 	mockFileStorage.On("ReadObject", file.DiskPath).Return(fileContent, nil)
@@ -41,9 +50,9 @@ func TestNew(t *testing.T) {
 	t.Cleanup(func() { server.Close() })
 
 	assert.Len(t, server.files, 1)
-	assert.Equal(t, FileWithContent{
+	assert.Equal(t, CachedFile{
 		File: repository.File{
-			ID:            1,
+			ID:            file.ID,
 			DiskPath:      "disk_path",
 			WorkspacePath: "workspace_path",
 			MimeType:      "text/plain; charset=utf-8",

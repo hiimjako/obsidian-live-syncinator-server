@@ -53,8 +53,13 @@ func TestPersistChunk(t *testing.T) {
 
 				fileContent, err := d.ReadObject(filePath)
 				require.NoError(t, err)
+				defer fileContent.Close()
 
-				assert.Equal(t, tt.expected, string(fileContent))
+				content := make([]byte, 512)
+				n, err := fileContent.Read(content)
+				require.NoError(t, err)
+
+				assert.Equal(t, tt.expected, string(content[:n]))
 			})
 		}
 	})
@@ -77,10 +82,14 @@ func TestDisk(t *testing.T) {
 	assert.NoError(t, err)
 
 	// read object
-	fileContent, err := d.ReadObject(p)
+	file, err := d.ReadObject(p)
 	assert.NoError(t, err)
 
-	assert.Equal(t, content, fileContent)
+	fileContent := make([]byte, 512)
+	n, err := file.Read(fileContent)
+	require.NoError(t, err)
+
+	assert.Equal(t, content, fileContent[:n])
 
 	// delete object
 	_, err = os.Stat(path.Join(d.basepath, p))
