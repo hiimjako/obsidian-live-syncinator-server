@@ -19,6 +19,7 @@ import (
 const (
 	MultipartFileField     = "file"
 	MultipartFilepathField = "path"
+	MultipartMetadata      = "metadata"
 )
 
 type UpdateFileBody struct {
@@ -94,8 +95,12 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 	mw := multipart.NewWriter(w)
 	defer mw.Close()
 
+	w.Header().Set("Content-Type", "multipart/mixed; boundary="+mw.Boundary())
+	w.WriteHeader(http.StatusOK)
+
 	metaPart, err := mw.CreatePart(textproto.MIMEHeader{
-		"Content-Type": []string{"application/json"},
+		"Content-Type":        []string{"application/json"},
+		"Content-Disposition": []string{fmt.Sprintf("form-data; name=%q", MultipartMetadata)},
 	})
 	if err != nil {
 		http.Error(w, "Error creating metadata part", http.StatusInternalServerError)
@@ -122,14 +127,12 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error creating file part", http.StatusInternalServerError)
 		return
 	}
+
 	_, err = io.Copy(filePart, fileContent)
 	if err != nil {
 		http.Error(w, "Error streaming file content", http.StatusInternalServerError)
 		return
 	}
-
-	w.Header().Set("Content-Type", "multipart/mixed; boundary="+mw.Boundary())
-	w.WriteHeader(http.StatusOK)
 }
 
 func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
