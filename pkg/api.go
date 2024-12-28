@@ -171,6 +171,10 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	filepath := r.FormValue(MultipartFilepathField)
+	if filepath == "" {
+		http.Error(w, "Error invalid filepath", http.StatusBadRequest)
+		return
+	}
 
 	// if there isn't any file an error is returned
 	_, err = s.db.FetchFileFromWorkspacePath(r.Context(), filepath)
