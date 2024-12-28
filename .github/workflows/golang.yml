@@ -56,7 +56,7 @@ jobs:
           version: latest
       - name: lint sql
         run: |
-          npx prettier-pnp --pnp prettier-plugin-sql --write migrations/*.sql --config .github/config/.prettierrc
+          npx prettier-pnp --pnp prettier-plugin-sql --write ./internal/migration/migrations/*.sql --config .github/config/.prettierrc
 
   test:
     needs: changes
