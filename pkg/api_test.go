@@ -2,9 +2,10 @@ package rtsync
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/hiimjako/syncinator/internal/repository"
@@ -12,6 +13,7 @@ import (
 	"github.com/hiimjako/syncinator/pkg/filestorage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -28,22 +30,22 @@ func Test_listFilesHandler(t *testing.T) {
 
 	workspaceID := int64(10)
 	filesToInsert := []struct {
-		file        string
+		file        []byte
 		filepath    string
 		workspaceID int64
 	}{
 		{
-			file:        "here a new file 1!",
+			file:        []byte("here a new file 1!"),
 			filepath:    "/home/file/1",
 			workspaceID: workspaceID,
 		},
 		{
-			file:        "here a new file 2!",
+			file:        []byte("here a new file 2!"),
 			filepath:    "/home/file/2",
 			workspaceID: workspaceID,
 		},
 		{
-			file:        "here a new file 3!",
+			file:        []byte("here a new file 3!"),
 			filepath:    "/home/file/3",
 			workspaceID: 123,
 		},
@@ -52,7 +54,7 @@ func Test_listFilesHandler(t *testing.T) {
 	for _, f := range filesToInsert {
 		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).Return(f.filepath, nil).Once()
 
-		form, contentType := testutils.CreateMultipart(t, f.filepath, f.file)
+		form, contentType := testutils.CreateMultipart(t, f.filepath, f.file, false)
 		res, _ := testutils.DoRequest[repository.File](
 			t,
 			server,
@@ -93,17 +95,17 @@ func Test_fetchFileHandler(t *testing.T) {
 
 	workspaceID := int64(10)
 	filesToInsert := []struct {
-		file        string
+		file        []byte
 		filepath    string
 		workspaceID int64
 	}{
 		{
-			file:        "here a new file 1!",
+			file:        []byte("here a new file 1!"),
 			filepath:    "/home/file/1",
 			workspaceID: 123,
 		},
 		{
-			file:        "here a new file 2!",
+			file:        []byte("here a new file 2!"),
 			filepath:    "/home/file/2",
 			workspaceID: workspaceID,
 		},
@@ -112,7 +114,7 @@ func Test_fetchFileHandler(t *testing.T) {
 	for _, f := range filesToInsert {
 		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).Return(f.filepath, nil).Once()
 
-		form, contentType := testutils.CreateMultipart(t, f.filepath, f.file)
+		form, contentType := testutils.CreateMultipart(t, f.filepath, f.file, false)
 		res, _ := testutils.DoRequest[repository.File](
 			t,
 			server,
@@ -169,25 +171,25 @@ func Test_fetchFileHandler(t *testing.T) {
 
 // Test_createFileHandler tests the createFileHandler using mocked storage
 func Test_createFileHandler(t *testing.T) {
-	mockFileStorage := new(filestorage.MockFileStorage)
-	db := testutils.CreateDB(t)
-	repo := repository.New(db)
-	options := Options{JWTSecret: []byte("secret")}
-	server := New(repo, mockFileStorage, options)
+	t.Run("should create a text file", func(t *testing.T) {
+		mockFileStorage := new(filestorage.MockFileStorage)
+		db := testutils.CreateDB(t)
+		repo := repository.New(db)
+		options := Options{JWTSecret: []byte("secret")}
+		server := New(repo, mockFileStorage, options)
 
-	t.Cleanup(func() { server.Close() })
+		t.Cleanup(func() { server.Close() })
 
-	t.Run("should create a file", func(t *testing.T) {
 		var workspaceID int64 = 10
 		filepath := "/home/file"
-		content := "here a new file!"
+		content := []byte("here a new file!")
 		diskPath := "/foo/bar"
 
 		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
 			Return(diskPath, nil).
 			Once()
 
-		form, contentType := testutils.CreateMultipart(t, filepath, content)
+		form, contentType := testutils.CreateMultipart(t, filepath, content, false)
 		res, body := testutils.DoRequest[repository.File](
 			t,
 			server,
@@ -205,7 +207,7 @@ func Test_createFileHandler(t *testing.T) {
 			DiskPath:      diskPath,
 			WorkspacePath: filepath,
 			MimeType:      "text/plain; charset=utf-8",
-			Hash:          filestorage.GenerateHash(strings.NewReader(content)),
+			Hash:          "17750bc8e19b7f86eb26e11fa76e075578d2163d49a159368ed18497407576ac",
 			CreatedAt:     body.CreatedAt,
 			UpdatedAt:     body.UpdatedAt,
 			WorkspaceID:   workspaceID,
@@ -220,7 +222,7 @@ func Test_createFileHandler(t *testing.T) {
 			DiskPath:      diskPath,
 			WorkspacePath: filepath,
 			MimeType:      "text/plain; charset=utf-8",
-			Hash:          filestorage.GenerateHash(strings.NewReader(content)),
+			Hash:          "17750bc8e19b7f86eb26e11fa76e075578d2163d49a159368ed18497407576ac",
 			CreatedAt:     files[0].CreatedAt,
 			UpdatedAt:     files[0].UpdatedAt,
 			WorkspaceID:   workspaceID,
@@ -230,17 +232,104 @@ func Test_createFileHandler(t *testing.T) {
 		mockFileStorage.AssertNumberOfCalls(t, "CreateObject", 1)
 	})
 
+	t.Run("should create a non-text file", func(t *testing.T) {
+		mockFileStorage := new(filestorage.MockFileStorage)
+		db := testutils.CreateDB(t)
+		repo := repository.New(db)
+		options := Options{JWTSecret: []byte("secret")}
+		server := New(repo, mockFileStorage, options)
+
+		t.Cleanup(func() { server.Close() })
+
+		var workspaceID int64 = 10
+		filepath := "/home/image"
+		diskPath := "/foo/image"
+
+		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
+			Return(diskPath, nil).
+			Once()
+
+		image, err := os.Open("./testdata/image.png")
+		require.NoError(t, err)
+
+		imageBytes, err := io.ReadAll(image)
+		require.NoError(t, err)
+
+		form, contentType := testutils.CreateMultipart(t, filepath, imageBytes, false)
+		res, body := testutils.DoRequest[repository.File](
+			t,
+			server,
+			http.MethodPost,
+			PathHttpApi+"/file",
+			form,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+			testutils.WithContentTypeHeader(contentType),
+		)
+
+		// check response
+		assert.Equal(t, http.StatusCreated, res.Code)
+		assert.Equal(t, repository.File{
+			ID:            1,
+			DiskPath:      diskPath,
+			WorkspacePath: filepath,
+			MimeType:      "image/png",
+			Hash:          "625e880acc3a38581bd71f456489f9a5c50ff31fa58631326b83ac7f2081960e",
+			CreatedAt:     body.CreatedAt,
+			UpdatedAt:     body.UpdatedAt,
+			WorkspaceID:   workspaceID,
+		}, body)
+
+		// check db
+		file, err := repo.FetchFile(context.Background(), 1)
+		assert.NoError(t, err)
+		assert.Equal(t, repository.File{
+			ID:            1,
+			DiskPath:      diskPath,
+			WorkspacePath: filepath,
+			MimeType:      "image/png",
+			Hash:          "625e880acc3a38581bd71f456489f9a5c50ff31fa58631326b83ac7f2081960e",
+			CreatedAt:     file.CreatedAt,
+			UpdatedAt:     file.UpdatedAt,
+			WorkspaceID:   workspaceID,
+		}, file)
+
+		// check mock assertions
+		mockFileStorage.AssertNumberOfCalls(t, "CreateObject", 1)
+	})
+
 	t.Run("should not insert duplicate paths", func(t *testing.T) {
+		mockFileStorage := new(filestorage.MockFileStorage)
+		db := testutils.CreateDB(t)
+		repo := repository.New(db)
+		options := Options{JWTSecret: []byte("secret")}
+		server := New(repo, mockFileStorage, options)
+
+		t.Cleanup(func() { server.Close() })
+
 		var workspaceID int64 = 10
 		filepath := "/home/file"
-		content := "here a new file!"
+		content := []byte("here a new file!")
 		diskPath := "/foo/bar"
 
 		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
 			Return(diskPath, nil).
 			Once()
 
-		form, contentType := testutils.CreateMultipart(t, filepath, content)
+		// create
+		form, contentType := testutils.CreateMultipart(t, filepath, content, false)
+		res, _ := testutils.DoRequest[string](
+			t,
+			server,
+			http.MethodPost,
+			PathHttpApi+"/file",
+			form,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+			testutils.WithContentTypeHeader(contentType),
+		)
+		assert.Equal(t, http.StatusCreated, res.Code)
+
+		// duplicate
+		form, contentType = testutils.CreateMultipart(t, filepath, content, false)
 		res, body := testutils.DoRequest[string](
 			t,
 			server,
@@ -278,7 +367,7 @@ func Test_deleteFileHandler(t *testing.T) {
 	t.Run("successfully delete a file", func(t *testing.T) {
 		var workspaceID int64 = 10
 		filepath := "/home/file"
-		content := "here a new file!"
+		content := []byte("here a new file!")
 		diskPath := "/foo/bar"
 
 		mockFileStorage.On("DeleteObject", diskPath).Return(nil).Once()
@@ -287,7 +376,7 @@ func Test_deleteFileHandler(t *testing.T) {
 			Once()
 
 		// creating file
-		form, contentType := testutils.CreateMultipart(t, filepath, content)
+		form, contentType := testutils.CreateMultipart(t, filepath, content, false)
 		res, createBody := testutils.DoRequest[repository.File](
 			t,
 			server,
@@ -324,7 +413,7 @@ func Test_deleteFileHandler(t *testing.T) {
 	t.Run("unauthorize to delete a file of other workspace", func(t *testing.T) {
 		var workspaceID int64 = 10
 		filepath := "/home/file/2"
-		content := "here a new file!"
+		content := []byte("here a new file!")
 		diskPath := "/foo/bar"
 
 		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
@@ -332,7 +421,7 @@ func Test_deleteFileHandler(t *testing.T) {
 			Once()
 
 		// creating file
-		form, contentType := testutils.CreateMultipart(t, filepath, content)
+		form, contentType := testutils.CreateMultipart(t, filepath, content, false)
 		res, createBody := testutils.DoRequest[repository.File](
 			t,
 			server,
@@ -380,7 +469,7 @@ func Test_updateFileHandler(t *testing.T) {
 	t.Run("successfully rename a file", func(t *testing.T) {
 		var workspaceID int64 = 10
 		filepath := "/home/file"
-		content := "here a new file!"
+		content := []byte("here a new file!")
 		diskPath := "/foo/bar"
 
 		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
@@ -388,7 +477,7 @@ func Test_updateFileHandler(t *testing.T) {
 			Once()
 
 		// creating file
-		form, contentType := testutils.CreateMultipart(t, filepath, content)
+		form, contentType := testutils.CreateMultipart(t, filepath, content, false)
 		res, createBody := testutils.DoRequest[repository.File](
 			t,
 			server,
@@ -424,7 +513,7 @@ func Test_updateFileHandler(t *testing.T) {
 			DiskPath:      diskPath,
 			WorkspacePath: updateData.Path,
 			MimeType:      "text/plain; charset=utf-8",
-			Hash:          filestorage.GenerateHash(strings.NewReader(content)),
+			Hash:          "17750bc8e19b7f86eb26e11fa76e075578d2163d49a159368ed18497407576ac",
 			CreatedAt:     files[0].CreatedAt,
 			UpdatedAt:     files[0].UpdatedAt,
 			WorkspaceID:   workspaceID,
@@ -437,7 +526,7 @@ func Test_updateFileHandler(t *testing.T) {
 	t.Run("unauthorize to rename a file of other workspace", func(t *testing.T) {
 		var workspaceID int64 = 10
 		filepath := "/home/file/2"
-		content := "here a new file!"
+		content := []byte("here a new file!")
 		diskPath := "/foo/bar"
 
 		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
@@ -445,7 +534,7 @@ func Test_updateFileHandler(t *testing.T) {
 			Once()
 
 		// creating file
-		form, contentType := testutils.CreateMultipart(t, filepath, content)
+		form, contentType := testutils.CreateMultipart(t, filepath, content, false)
 		res, createBody := testutils.DoRequest[repository.File](
 			t,
 			server,

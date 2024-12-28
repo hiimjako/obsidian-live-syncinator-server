@@ -3,6 +3,7 @@ package testutils
 import (
 	"bytes"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"mime/multipart"
@@ -101,14 +102,24 @@ func DoRequest[T any](
 			require.NoError(t, err)
 
 			contentType := part.Header.Get("Content-Type")
-			partBody, err := io.ReadAll(part)
-			require.NoError(t, err)
+			contentTranseferEncoding := part.Header.Get("Content-Transfer-Encoding")
 
 			switch contentType {
 			case "application/json":
-				err := json.Unmarshal(partBody, &fileWithContent.Metadata)
+				partBody, err := io.ReadAll(part)
+				require.NoError(t, err)
+				err = json.Unmarshal(partBody, &fileWithContent.Metadata)
 				require.NoError(t, err)
 			default:
+				var partBody []byte
+				if contentTranseferEncoding == "base64" {
+					decoder := base64.NewDecoder(base64.StdEncoding, part)
+					partBody, err = io.ReadAll(decoder)
+					require.NoError(t, err)
+				} else {
+					partBody, err = io.ReadAll(part)
+					require.NoError(t, err)
+				}
 				fileWithContent.Content = partBody
 			}
 		}
@@ -135,15 +146,23 @@ func DoRequest[T any](
 	return res, resBody
 }
 
-func CreateMultipart(t *testing.T, filepath, content string) (*bytes.Buffer, string) {
+func CreateMultipart(t *testing.T, filepath string, content []byte, encodeBase64 bool) (*bytes.Buffer, string) {
 	buf := &bytes.Buffer{}
 	mpw := multipart.NewWriter(buf)
 
 	filename := path.Base(filepath)
 	fileWriter, err := mpw.CreateFormFile("file", filename)
 	assert.NoError(t, err)
-	_, err = fileWriter.Write([]byte(content))
-	assert.NoError(t, err)
+
+	if encodeBase64 {
+		encoder := base64.NewEncoder(base64.StdEncoding, fileWriter)
+		defer encoder.Close()
+		_, err = encoder.Write(content)
+		assert.NoError(t, err)
+	} else {
+		_, err = fileWriter.Write(content)
+		assert.NoError(t, err)
+	}
 
 	pathWriter, err := mpw.CreateFormField("path")
 	assert.NoError(t, err)

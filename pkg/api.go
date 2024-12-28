@@ -1,6 +1,8 @@
 package rtsync
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +11,7 @@ import (
 	"net/textproto"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/internal/requestutils"
@@ -119,16 +122,28 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 	defer fileContent.Close()
 
 	filename := path.Base(file.WorkspacePath)
-	filePart, err := mw.CreatePart(textproto.MIMEHeader{
-		"Content-Type":        []string{"application/octet-stream"},
+	mimeHeader := textproto.MIMEHeader{
+		"Content-Type":        []string{file.MimeType},
 		"Content-Disposition": []string{fmt.Sprintf(`attachment; filename=%q`, filename)},
-	})
+	}
+
+	filePart, err := mw.CreatePart(mimeHeader)
 	if err != nil {
 		http.Error(w, "Error creating file part", http.StatusInternalServerError)
 		return
 	}
 
-	_, err = io.Copy(filePart, fileContent)
+	var writer = filePart
+	// if it is a non text file encode it in base64
+	if !strings.HasPrefix(file.MimeType, "text/") {
+		mimeHeader["Content-Transfer-Encoding"] = []string{"base64"}
+		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
+		defer encoder.Close()
+
+		writer = encoder
+	}
+
+	_, err = io.Copy(writer, fileContent)
 	if err != nil {
 		http.Error(w, "Error streaming file content", http.StatusInternalServerError)
 		return
@@ -148,7 +163,7 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, _, err := r.FormFile(MultipartFileField)
+	file, header, err := r.FormFile(MultipartFileField)
 	if err != nil {
 		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
 		return
@@ -164,14 +179,27 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	diskPath, err := s.storage.CreateObject(file)
+	var fileReader io.ReadSeeker = file
+	if header.Header.Get("Content-Transfer-Encoding") == "base64" {
+		decoder := base64.NewDecoder(base64.StdEncoding, file)
+
+		data, err := io.ReadAll(decoder)
+		if err == nil {
+			http.Error(w, "Unable to parse base64", http.StatusBadRequest)
+			return
+		}
+
+		fileReader = bytes.NewReader(data)
+	}
+
+	diskPath, err := s.storage.CreateObject(fileReader)
 	if err != nil {
 		http.Error(w, ErrInvalidFile, http.StatusInternalServerError)
 		return
 	}
 
-	mimeType := requestutils.DetectFileMimeType(file)
-	hash := filestorage.GenerateHash(file)
+	mimeType := requestutils.DetectFileMimeType(fileReader)
+	hash := filestorage.GenerateHash(fileReader)
 	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
 
 	dbFile, err := s.db.CreateFile(r.Context(), repository.CreateFileParams{
