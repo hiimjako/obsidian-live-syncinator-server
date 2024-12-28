@@ -139,7 +139,7 @@ func Test_fetchFileHandler(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, res.Code)
 
 	// fetch file
-	mockFileStorage.On("ReadObject", filesToInsert[1].filepath).Return([]byte(filesToInsert[1].file), nil)
+	mockFileStorage.On("ReadObject", filesToInsert[1].filepath).Return(filesToInsert[1].file, nil)
 
 	res, body := testutils.DoRequest[testutils.FileWithContent](
 		t,
