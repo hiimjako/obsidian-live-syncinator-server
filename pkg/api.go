@@ -124,7 +124,7 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 	filename := path.Base(file.WorkspacePath)
 	mimeHeader := textproto.MIMEHeader{
 		"Content-Type":        []string{file.MimeType},
-		"Content-Disposition": []string{fmt.Sprintf(`attachment; filename=%q`, filename)},
+		"Content-Disposition": []string{fmt.Sprintf(`form-data; filename=%q`, filename)},
 	}
 
 	filePart, err := mw.CreatePart(mimeHeader)
@@ -188,7 +188,7 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 		decoder := base64.NewDecoder(base64.StdEncoding, file)
 
 		data, err := io.ReadAll(decoder)
-		if err == nil {
+		if err != nil {
 			http.Error(w, "Unable to parse base64", http.StatusBadRequest)
 			return
 		}

@@ -245,7 +245,7 @@ func Test_createFileHandler(t *testing.T) {
 		filepath := "/home/image"
 		diskPath := "/foo/image"
 
-		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
+		mockFileStorage.On("CreateObject", mock.AnythingOfType("*bytes.Reader")).
 			Return(diskPath, nil).
 			Once()
 
@@ -255,7 +255,7 @@ func Test_createFileHandler(t *testing.T) {
 		imageBytes, err := io.ReadAll(image)
 		require.NoError(t, err)
 
-		form, contentType := testutils.CreateMultipart(t, filepath, imageBytes, false)
+		form, contentType := testutils.CreateMultipart(t, filepath, imageBytes, true)
 		res, body := testutils.DoRequest[repository.File](
 			t,
 			server,

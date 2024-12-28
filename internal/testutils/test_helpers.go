@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"path"
 	"strings"
 	"testing"
@@ -151,25 +153,34 @@ func CreateMultipart(t *testing.T, filepath string, content []byte, encodeBase64
 	mpw := multipart.NewWriter(buf)
 
 	filename := path.Base(filepath)
-	fileWriter, err := mpw.CreateFormFile("file", filename)
-	assert.NoError(t, err)
+	mimeHeader := textproto.MIMEHeader{
+		"Content-Type":        []string{"application/octet-stream"},
+		"Content-Disposition": []string{fmt.Sprintf(`form-data; name=%q; filename=%q`, "file", filename)},
+	}
+	if encodeBase64 {
+		mimeHeader["Content-Transfer-Encoding"] = []string{"base64"}
+	}
+
+	fileWriter, err := mpw.CreatePart(mimeHeader)
+	require.NoError(t, err)
 
 	if encodeBase64 {
+		require.NoError(t, err)
 		encoder := base64.NewEncoder(base64.StdEncoding, fileWriter)
 		defer encoder.Close()
 		_, err = encoder.Write(content)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	} else {
 		_, err = fileWriter.Write(content)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 
 	pathWriter, err := mpw.CreateFormField("path")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = pathWriter.Write([]byte(filepath))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	assert.NoError(t, mpw.Close())
+	require.NoError(t, mpw.Close())
 
 	return buf, mpw.FormDataContentType()
 }
