@@ -19,6 +19,11 @@ func IsMultipartFormData(r *http.Request) bool {
 func DetectFileMimeType(file io.ReadSeeker) string {
 	const defaultContentType = "application/octet-stream"
 
+	_, err := file.Seek(0, io.SeekStart)
+	if err != nil {
+		return defaultContentType
+	}
+
 	// Use mime.TypeByExtension as a fallback for file extension MIME type
 	// Try to detect the MIME type based on file content (magic number)
 	buf := make([]byte, 512)
