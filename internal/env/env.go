@@ -10,7 +10,7 @@ import (
 )
 
 type EnvVariables struct {
-	Host string `env:"HOST,default=127.0.0.1"`
+	Host string `env:"HOST,default=0.0.0.0"`
 	Port string `env:"PORT,default=8080"`
 
 	StorageDir     string `env:"STORAGE_DIR,default=./data"`
