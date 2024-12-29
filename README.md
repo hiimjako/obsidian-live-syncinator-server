@@ -15,12 +15,16 @@ Start the docker container:
 docker run --name obsidian-live-syncinator-server ghcr.io/hiimjako/obsidian-live-syncinator-server -p 8080:8080 --env-file .env
 ```
 
+> [!NOTE]  
+> The container uses WebSockets, so be sure to enable it if you run the service under reverse proxy.
+
+
 ## Create a new Workspace
 ```sh
 docker exec obsidian-live-syncinator-server ./cli -name "workspace-name" -pass "strong-pass" -db "./data/db.sqlite3"
 ```
 
-> [!WARNING]  
+> [!IMPORTANT]  
 > The `db` argument must be the same as `SQLITE_FILEPATH` env variable.
 
 
