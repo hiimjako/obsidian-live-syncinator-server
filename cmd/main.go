@@ -48,7 +48,7 @@ func run(ev *env.EnvVariables) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("listening on ws://%v", l.Addr())
+	log.Printf("listening on http://%v", l.Addr())
 
 	db := repository.New(dbSqlite)
 	disk := filestorage.NewDisk(ev.StorageDir)
