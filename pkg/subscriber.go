@@ -78,6 +78,7 @@ func (s *subscriber) IsOpen() bool {
 }
 
 func (s *subscriber) Close() error {
+	log.Printf("client %s (%d) disconnected\n", s.clientID, s.workspaceID)
 	s.isConnected.Store(false)
 	return s.conn.CloseNow()
 }
@@ -133,11 +134,13 @@ func (s *subscriber) Listen() {
 				err := s.WriteMessage(chunkMsg, time.Second*1)
 				if err != nil {
 					log.Printf("error sending chunk message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
+					s.checkWsError(err)
 				}
 			case eventMsg := <-s.eventMsgQueue:
 				err := s.WriteMessage(eventMsg, time.Second*1)
 				if err != nil {
 					log.Printf("error sending event message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
+					s.checkWsError(err)
 				}
 			case <-s.ctx.Done():
 				s.Close()
@@ -157,11 +160,7 @@ func (s *subscriber) ParseChunkMessage() (ChunkMessage, error) {
 
 	err := wsjson.Read(s.ctx, s.conn, &data)
 	if err != nil {
-		if websocket.CloseStatus(err) != -1 || strings.Contains(err.Error(), "EOF") {
-			s.Close()
-			return data, fmt.Errorf("client %s disconnected", s.clientID)
-		}
-
+		s.checkWsError(err)
 		return data, err
 	}
 
@@ -173,11 +172,7 @@ func (s *subscriber) ParseEventMessage() (EventMessage, error) {
 
 	err := wsjson.Read(s.ctx, s.conn, &data)
 	if err != nil {
-		if websocket.CloseStatus(err) != -1 || strings.Contains(err.Error(), "EOF") {
-			s.Close()
-			return data, fmt.Errorf("client %s disconnected", s.clientID)
-		}
-
+		s.checkWsError(err)
 		return data, err
 	}
 
@@ -198,11 +193,7 @@ func (s *subscriber) WaitMessage() (map[string]any, error) {
 
 	err := wsjson.Read(s.ctx, s.conn, &msg)
 	if err != nil {
-		if websocket.CloseStatus(err) != -1 || strings.Contains(err.Error(), "EOF") {
-			s.Close()
-			return msg, fmt.Errorf("client %s disconnected", s.clientID)
-		}
-
+		s.checkWsError(err)
 		return msg, err
 	}
 
@@ -226,4 +217,10 @@ func mapToStruct(data map[string]any, result interface{}) error {
 		return err
 	}
 	return nil
+}
+
+func (s *subscriber) checkWsError(err error) {
+	if websocket.CloseStatus(err) != -1 || strings.Contains(err.Error(), "EOF") {
+		s.Close()
+	}
 }
