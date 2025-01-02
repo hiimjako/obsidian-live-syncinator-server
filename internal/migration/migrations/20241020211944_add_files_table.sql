@@ -10,6 +10,7 @@ CREATE TABLE files (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
   version INTEGER DEFAULT 0 NOT NULL,
   workspace_id INTEGER NOT NULL,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces (id),
   UNIQUE (disk_path, workspace_path)
 );
 
