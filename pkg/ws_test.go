@@ -78,80 +78,6 @@ func Test_wsAuth(t *testing.T) {
 	})
 }
 
-func Test_wsHandler(t *testing.T) {
-	db := testutils.CreateDB(t)
-
-	mockFileStorage := new(filestorage.MockFileStorage)
-	repo := repository.New(db)
-	authOptions := Options{JWTSecret: []byte("secret")}
-	handler := New(repo, mockFileStorage, authOptions)
-	ts := httptest.NewServer(handler)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-
-	var workspaceID int64 = 10
-	url := createWsUrlWithAuth(t, ts.URL, workspaceID, authOptions.JWTSecret)
-
-	//nolint:bodyclose
-	sender, _, err := websocket.Dial(ctx, url, nil)
-	require.NoError(t, err)
-
-	//nolint:bodyclose
-	reciver, _, err := websocket.Dial(ctx, url, nil)
-	require.NoError(t, err)
-
-	file, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
-		DiskPath:      "disk_path",
-		WorkspacePath: "workspace_path",
-		MimeType:      "",
-		Hash:          "",
-		WorkspaceID:   1,
-	})
-	assert.NoError(t, err)
-
-	msg := ChunkMessage{
-		WsMessageHeader: WsMessageHeader{
-			Type:   ChunkEventType,
-			FileId: file.ID,
-		},
-		Chunks: []diff.DiffChunk{
-			{
-				Position: 0,
-				Type:     diff.DiffAdd,
-				Text:     "Hello!",
-				Len:      6,
-			},
-		},
-	}
-
-	mockFileStorage.On("PersistChunk", file.DiskPath, msg.Chunks[0]).Return(nil)
-
-	err = wsjson.Write(ctx, sender, msg)
-	assert.NoError(t, err)
-	go func() {
-		// should not recive any message
-		var recMsg ChunkMessage
-		err := wsjson.Read(ctx, sender, &recMsg)
-		assert.Error(t, err)
-	}()
-
-	var recMsg ChunkMessage
-	err = wsjson.Read(ctx, reciver, &recMsg)
-	assert.NoError(t, err)
-	assert.Equal(t, msg, recMsg)
-
-	time.Sleep(10 * time.Millisecond)
-	mockFileStorage.AssertCalled(t, "PersistChunk", file.DiskPath, msg.Chunks[0])
-
-	t.Cleanup(func() {
-		cancel()
-		sender.Close(websocket.StatusNormalClosure, "")
-		reciver.Close(websocket.StatusNormalClosure, "")
-		ts.Close()
-		handler.Close()
-	})
-}
-
 func Test_handleChunk(t *testing.T) {
 	db := testutils.CreateDB(t)
 
@@ -161,7 +87,7 @@ func Test_handleChunk(t *testing.T) {
 	handler := New(repo, mockFileStorage, authOptions)
 	ts := httptest.NewServer(handler)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 
 	var workspaceID1 int64 = 1
 	var workspaceID2 int64 = 2
@@ -189,11 +115,15 @@ func Test_handleChunk(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
+	// add time to update updatedAt
+	time.Sleep(1 * time.Second)
+
 	msg := ChunkMessage{
 		WsMessageHeader: WsMessageHeader{
 			Type:   ChunkEventType,
 			FileId: file.ID,
 		},
+		Version: 0,
 		Chunks: []diff.DiffChunk{
 			{
 				Position: 0,
@@ -234,6 +164,10 @@ func Test_handleChunk(t *testing.T) {
 		var recMsg ChunkMessage
 		err := wsjson.Read(ctx, reciverWorkspace1, &recMsg)
 		assert.NoError(t, err)
+
+		// only version should differ
+		assert.Equal(t, msg.Version+1, recMsg.Version)
+		recMsg.Version = msg.Version
 		assert.Equal(t, msg, recMsg)
 
 		wg.Done()
@@ -244,6 +178,13 @@ func Test_handleChunk(t *testing.T) {
 	wg.Wait()
 
 	mockFileStorage.AssertCalled(t, "PersistChunk", file.DiskPath, msg.Chunks[0])
+
+	updatedFile, err := repo.FetchFile(context.Background(), file.ID)
+	assert.NoError(t, err)
+
+	assert.Equal(t, int64(1), handler.files[file.ID].Version)
+	assert.Equal(t, int64(1), updatedFile.Version)
+	assert.Greater(t, updatedFile.UpdatedAt, file.UpdatedAt)
 
 	t.Cleanup(func() {
 		cancel()

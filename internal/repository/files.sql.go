@@ -264,22 +264,29 @@ func (q *Queries) FetchWorkspaceFiles(ctx context.Context, workspaceID int64) ([
 	return items, nil
 }
 
-const updateUpdatedAt = `-- name: UpdateUpdatedAt :exec
+const updateFileVersion = `-- name: UpdateFileVersion :exec
 UPDATE files
 SET 
+    version = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
 `
 
-func (q *Queries) UpdateUpdatedAt(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, updateUpdatedAt, id)
+type UpdateFileVersionParams struct {
+	Version int64 `json:"version"`
+	ID      int64 `json:"id"`
+}
+
+func (q *Queries) UpdateFileVersion(ctx context.Context, arg UpdateFileVersionParams) error {
+	_, err := q.db.ExecContext(ctx, updateFileVersion, arg.Version, arg.ID)
 	return err
 }
 
 const updateWorkspacePath = `-- name: UpdateWorkspacePath :exec
 UPDATE files
 SET 
-    workspace_path = ?
+    workspace_path = ?,
+    updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
 `
 

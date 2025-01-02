@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/coder/websocket"
+	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/pkg/diff"
 	"github.com/hiimjako/syncinator/pkg/middleware"
 )
@@ -33,7 +34,8 @@ type EventMessage struct {
 
 type ChunkMessage struct {
 	WsMessageHeader
-	Chunks []diff.DiffChunk `json:"chunks"`
+	Chunks  []diff.DiffChunk `json:"chunks"`
+	Version int64            `json:"version"`
 }
 
 func (s *syncinator) wsHandler() http.Handler {
@@ -94,6 +96,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	}
 	diffs := diff.ComputeDiff(file.Content, localCopy)
 
+	file.Version += 1
 	file.Content = localCopy
 	s.files[data.FileId] = file
 
@@ -102,6 +105,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		s.broadcastMessage(sender, ChunkMessage{
 			WsMessageHeader: data.WsMessageHeader,
 			Chunks:          diffs,
+			Version:         file.Version,
 		})
 	}
 }
@@ -164,7 +168,10 @@ func (s *syncinator) internalBusProcessor() {
 					log.Println(err)
 				}
 
-				err = s.db.UpdateUpdatedAt(context.Background(), chunkMsg.FileId)
+				err = s.db.UpdateFileVersion(context.Background(), repository.UpdateFileVersionParams{
+					ID:      chunkMsg.FileId,
+					Version: chunkMsg.Version + 1,
+				})
 				if err != nil {
 					log.Println(err)
 				}

@@ -38,15 +38,17 @@ FROM files
 WHERE workspace_id = ? AND workspace_path = ?
 LIMIT 1;
 
--- name: UpdateUpdatedAt :exec
-UPDATE files
-SET 
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = ?;
-
 -- name: UpdateWorkspacePath :exec
 UPDATE files
 SET 
-    workspace_path = ?
+    workspace_path = ?,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;
+
+-- name: UpdateFileVersion :exec
+UPDATE files
+SET 
+    version = ?,
+    updated_at = CURRENT_TIMESTAMP
 WHERE id = ?;
 
