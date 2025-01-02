@@ -125,10 +125,10 @@ func Test_handleChunk(t *testing.T) {
 			FileID: file.ID,
 		},
 		Version: 0,
-		Chunks: []diff.DiffChunk{
+		Chunks: []diff.Chunk{
 			{
 				Position: 0,
-				Type:     diff.DiffAdd,
+				Type:     diff.Add,
 				Text:     "Hello!",
 				Len:      6,
 			},

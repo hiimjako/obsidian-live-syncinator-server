@@ -74,13 +74,13 @@ func (s *Screen) Content() string {
 	return content
 }
 
-func (s *Screen) ApplyDiff(chunks []diff.DiffChunk) string {
+func (s *Screen) ApplyDiff(chunks []diff.Chunk) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	content := string(s.buffer)
 	for _, d := range chunks {
-		content = diff.ApplyDiff(content, d)
+		content = diff.Apply(content, d)
 	}
 	s.buffer = []rune(content)
 

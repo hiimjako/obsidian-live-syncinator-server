@@ -13,7 +13,7 @@ type MockFileStorage struct {
 	mock.Mock
 }
 
-func (m *MockFileStorage) PersistChunk(p string, d diff.DiffChunk) error {
+func (m *MockFileStorage) PersistChunk(p string, d diff.Chunk) error {
 	args := m.Called(p, d)
 	return args.Error(0)
 }

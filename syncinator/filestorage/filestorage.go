@@ -11,7 +11,7 @@ import (
 type Storage interface {
 	// PersistChunk adds a chunk to the provided filepath, it returns an error
 	// if the file doesn't exists
-	PersistChunk(string, diff.DiffChunk) error
+	PersistChunk(string, diff.Chunk) error
 	// CreateObject creates an object and returns the path
 	CreateObject(io.Reader) (string, error)
 	// DeleteObject deletes an object

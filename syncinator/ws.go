@@ -35,8 +35,8 @@ type EventMessage struct {
 
 type ChunkMessage struct {
 	WsMessageHeader
-	Chunks  []diff.DiffChunk `json:"chunks"`
-	Version int64            `json:"version"`
+	Chunks  []diff.Chunk `json:"chunks"`
+	Version int64        `json:"version"`
 }
 
 func (s *syncinator) wsHandler() http.Handler {
@@ -93,9 +93,9 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	file := s.files[data.FileID]
 	localCopy := file.Content
 	for _, d := range data.Chunks {
-		localCopy = diff.ApplyDiff(localCopy, d)
+		localCopy = diff.Apply(localCopy, d)
 	}
-	diffs := diff.ComputeDiff(file.Content, localCopy)
+	diffs := diff.Compute(file.Content, localCopy)
 
 	data.Version += 1
 	file.Version += 1

@@ -17,24 +17,24 @@ func TestPersistChunk(t *testing.T) {
 		tests := []struct {
 			name     string
 			expected string
-			diffs    [][]diff.DiffChunk
+			diffs    [][]diff.Chunk
 		}{
 			{
 				name:     "compute remove chunk in present file",
 				expected: "hello",
-				diffs: [][]diff.DiffChunk{
-					diff.ComputeDiff("hello", ""),
-					diff.ComputeDiff("", "he__llo"),
-					diff.ComputeDiff("he__llo", "hello"),
+				diffs: [][]diff.Chunk{
+					diff.Compute("hello", ""),
+					diff.Compute("", "he__llo"),
+					diff.Compute("he__llo", "hello"),
 				},
 			},
 			{
 				name:     "compute add chunk in present file",
 				expected: "hello world!",
-				diffs: [][]diff.DiffChunk{
-					diff.ComputeDiff("", "hello"),
-					diff.ComputeDiff("hello", "hello!"),
-					diff.ComputeDiff("hello!", "hello world!"),
+				diffs: [][]diff.Chunk{
+					diff.Compute("", "hello"),
+					diff.Compute("hello", "hello!"),
+					diff.Compute("hello!", "hello world!"),
 				},
 			},
 		}
@@ -68,7 +68,7 @@ func TestPersistChunk(t *testing.T) {
 		dir := t.TempDir()
 		d := NewDisk(dir)
 
-		assert.Error(t, d.PersistChunk("not-existing-file", diff.ComputeDiff("", "foo")[0]))
+		assert.Error(t, d.PersistChunk("not-existing-file", diff.Compute("", "foo")[0]))
 	})
 }
 

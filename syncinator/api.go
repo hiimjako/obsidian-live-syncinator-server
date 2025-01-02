@@ -32,10 +32,10 @@ type UpdateFileBody struct {
 }
 
 type Operation struct {
-	FileID    int64            `json:"fileId"`
-	Version   int64            `json:"version"`
-	Operation []diff.DiffChunk `json:"operation"`
-	CreatedAt time.Time        `json:"createdAt"`
+	FileID    int64        `json:"fileId"`
+	Version   int64        `json:"version"`
+	Operation []diff.Chunk `json:"operation"`
+	CreatedAt time.Time    `json:"createdAt"`
 }
 
 const (
@@ -111,7 +111,7 @@ func (s *syncinator) listOperationsHandler(w http.ResponseWriter, r *http.Reques
 
 	operations := make([]Operation, len(dbOperations))
 	for i := 0; i < len(operations); i++ {
-		var chunks []diff.DiffChunk
+		var chunks []diff.Chunk
 		err := json.Unmarshal([]byte(dbOperations[i].Operation), &chunks)
 		if err != nil {
 			continue

@@ -70,7 +70,7 @@ func (d Disk) ReadObject(relativePath string) (io.ReadCloser, error) {
 	return os.Open(diskPath)
 }
 
-func (d Disk) PersistChunk(relativePath string, chunk diff.DiffChunk) error {
+func (d Disk) PersistChunk(relativePath string, chunk diff.Chunk) error {
 	diskPath := path.Join(d.basepath, relativePath)
 
 	_, err := os.Stat(diskPath)
@@ -80,9 +80,9 @@ func (d Disk) PersistChunk(relativePath string, chunk diff.DiffChunk) error {
 
 	relativePath = path.Join(d.basepath, relativePath)
 	switch chunk.Type {
-	case diff.DiffAdd:
+	case diff.Add:
 		return addBytesToFile(relativePath, chunk.Position, chunk.Text)
-	case diff.DiffRemove:
+	case diff.Remove:
 		return removeBytesFromFile(relativePath, chunk.Position, chunk.Len)
 	}
 	return fmt.Errorf("diff type %v not supported", chunk.Type)

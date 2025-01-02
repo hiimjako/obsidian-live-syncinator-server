@@ -7,11 +7,11 @@ import (
 type Operation int8
 
 const (
-	DiffRemove Operation = -1
-	DiffAdd    Operation = 1
+	Remove Operation = -1
+	Add    Operation = 1
 )
 
-type DiffChunk struct {
+type Chunk struct {
 	Type Operation `json:"type"`
 	// Position indicates the position immediately after the last valid character, inclusive.
 	Position int64  `json:"position"`
@@ -19,8 +19,8 @@ type DiffChunk struct {
 	Len      int64  `json:"len"`
 }
 
-func ComputeDiff(oldText, newText string) []DiffChunk {
-	var diffChunks []DiffChunk
+func Compute(oldText, newText string) []Chunk {
+	var diffChunks []Chunk
 
 	dmp := diffmatchpatch.New()
 
@@ -30,16 +30,16 @@ func ComputeDiff(oldText, newText string) []DiffChunk {
 		l := int64(len(diff.Text))
 		switch diff.Type {
 		case diffmatchpatch.DiffInsert:
-			diffChunks = append(diffChunks, DiffChunk{
-				Type:     DiffAdd,
+			diffChunks = append(diffChunks, Chunk{
+				Type:     Add,
 				Position: idx,
 				Text:     diff.Text,
 				Len:      l,
 			})
 			idx += l
 		case diffmatchpatch.DiffDelete:
-			diffChunks = append(diffChunks, DiffChunk{
-				Type:     DiffRemove,
+			diffChunks = append(diffChunks, Chunk{
+				Type:     Remove,
 				Position: idx,
 				Text:     diff.Text,
 				Len:      l,
@@ -52,11 +52,11 @@ func ComputeDiff(oldText, newText string) []DiffChunk {
 	return diffChunks
 }
 
-func ApplyDiff(text string, diff DiffChunk) string {
+func Apply(text string, diff Chunk) string {
 	textLen := int64(len(text))
 
 	switch diff.Type {
-	case DiffAdd:
+	case Add:
 		if diff.Position > textLen {
 			return text + diff.Text
 		}
@@ -67,7 +67,7 @@ func ApplyDiff(text string, diff DiffChunk) string {
 
 		return text[:diff.Position] + diff.Text + text[diff.Position:]
 
-	case DiffRemove:
+	case Remove:
 		if text == "" || diff.Position >= textLen {
 			return text
 		}

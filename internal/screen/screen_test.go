@@ -48,10 +48,10 @@ func TestScreen(t *testing.T) {
 	assert.Contains(t, s.contentWithCursor(), "hell|o!")
 	assert.Equal(t, "hello!", s.Content())
 
-	updatedContent := s.ApplyDiff([]diff.DiffChunk{
+	updatedContent := s.ApplyDiff([]diff.Chunk{
 		{
 			Position: 5,
-			Type:     diff.DiffAdd,
+			Type:     diff.Add,
 			Text:     " world",
 			Len:      6,
 		},

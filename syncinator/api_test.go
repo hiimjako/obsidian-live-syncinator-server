@@ -683,15 +683,15 @@ func Test_listOperationsHandler(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, res.Code)
 	}
 
-	chunks := []diff.DiffChunk{
+	chunks := []diff.Chunk{
 		{
-			Type:     diff.DiffAdd,
+			Type:     diff.Add,
 			Position: 1,
 			Text:     "foo",
 			Len:      3,
 		},
 		{
-			Type:     diff.DiffRemove,
+			Type:     diff.Remove,
 			Position: 1,
 			Text:     "bar",
 			Len:      3,
