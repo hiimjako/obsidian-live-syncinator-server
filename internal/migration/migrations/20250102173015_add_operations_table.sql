@@ -5,8 +5,8 @@ CREATE TABLE operations (
   version INTEGER NOT NULL,
   operation TEXT CHECK (json_valid(operation)) NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  PRIMARY KEY(file_id, version),
-  FOREIGN KEY(file_id) REFERENCES files(id)
+  PRIMARY KEY (file_id, version),
+  FOREIGN KEY (file_id) REFERENCES files (id)
 );
 
 -- +goose StatementEnd
@@ -15,4 +15,3 @@ CREATE TABLE operations (
 DROP TABLE operations;
 
 -- +goose StatementEnd
-
