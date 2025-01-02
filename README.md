@@ -60,4 +60,3 @@ GOOSE_DRIVER=sqlite GOOSE_MIGRATION_DIR=./internal/migration/migrations/ goose c
 - Create cluster of servers
 - Ad DST (deterministic simulation testing) to test chunks
 - Update text file hash on socket update
-- Add WS auth, to avoid to broadcast events to other workspaces

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -137,8 +138,6 @@ func Test_wsHandler(t *testing.T) {
 	var recMsg ChunkMessage
 	err = wsjson.Read(ctx, reciver, &recMsg)
 	assert.NoError(t, err)
-
-	msg.SenderId = recMsg.SenderId
 	assert.Equal(t, msg, recMsg)
 
 	time.Sleep(10 * time.Millisecond)
@@ -148,6 +147,192 @@ func Test_wsHandler(t *testing.T) {
 		cancel()
 		sender.Close(websocket.StatusNormalClosure, "")
 		reciver.Close(websocket.StatusNormalClosure, "")
+		ts.Close()
+		handler.Close()
+	})
+}
+
+func Test_handleChunk(t *testing.T) {
+	db := testutils.CreateDB(t)
+
+	mockFileStorage := new(filestorage.MockFileStorage)
+	repo := repository.New(db)
+	authOptions := Options{JWTSecret: []byte("secret")}
+	handler := New(repo, mockFileStorage, authOptions)
+	ts := httptest.NewServer(handler)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+
+	var workspaceID1 int64 = 1
+	var workspaceID2 int64 = 2
+	urlWorkspace1 := createWsUrlWithAuth(t, ts.URL, workspaceID1, authOptions.JWTSecret)
+	urlWorkspace2 := createWsUrlWithAuth(t, ts.URL, workspaceID2, authOptions.JWTSecret)
+
+	//nolint:bodyclose
+	senderWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
+	require.NoError(t, err)
+
+	//nolint:bodyclose
+	reciverWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
+	require.NoError(t, err)
+
+	//nolint:bodyclose
+	reciverWorkspace2, _, err := websocket.Dial(ctx, urlWorkspace2, nil)
+	require.NoError(t, err)
+
+	file, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath:      "disk_path",
+		WorkspacePath: "workspace_path",
+		MimeType:      "",
+		Hash:          "",
+		WorkspaceID:   1,
+	})
+	assert.NoError(t, err)
+
+	msg := ChunkMessage{
+		WsMessageHeader: WsMessageHeader{
+			Type:   ChunkEventType,
+			FileId: file.ID,
+		},
+		Chunks: []diff.DiffChunk{
+			{
+				Position: 0,
+				Type:     diff.DiffAdd,
+				Text:     "Hello!",
+				Len:      6,
+			},
+		},
+	}
+
+	mockFileStorage.On("PersistChunk", file.DiskPath, msg.Chunks[0]).Return(nil)
+
+	wg := sync.WaitGroup{}
+	wg.Add(3)
+
+	// check that only ws on same workspace recive the event
+
+	go func() {
+		// the sender should not recive any message
+		var recMsg ChunkMessage
+		err := wsjson.Read(ctx, senderWorkspace1, &recMsg)
+		assert.Error(t, err)
+
+		wg.Done()
+	}()
+
+	go func() {
+		// the reciver on other workspace should not recive any message
+		var recMsg ChunkMessage
+		err := wsjson.Read(ctx, reciverWorkspace2, &recMsg)
+		assert.Error(t, err)
+
+		wg.Done()
+	}()
+
+	go func() {
+		// the reciver on the same workspace should recive the message
+		var recMsg ChunkMessage
+		err := wsjson.Read(ctx, reciverWorkspace1, &recMsg)
+		assert.NoError(t, err)
+		assert.Equal(t, msg, recMsg)
+
+		wg.Done()
+	}()
+
+	assert.NoError(t, wsjson.Write(ctx, senderWorkspace1, msg))
+
+	wg.Wait()
+
+	mockFileStorage.AssertCalled(t, "PersistChunk", file.DiskPath, msg.Chunks[0])
+
+	t.Cleanup(func() {
+		cancel()
+		senderWorkspace1.Close(websocket.StatusNormalClosure, "")
+		reciverWorkspace1.Close(websocket.StatusNormalClosure, "")
+		reciverWorkspace2.Close(websocket.StatusNormalClosure, "")
+		ts.Close()
+		handler.Close()
+	})
+}
+
+func Test_handleEvent(t *testing.T) {
+	db := testutils.CreateDB(t)
+
+	mockFileStorage := new(filestorage.MockFileStorage)
+	repo := repository.New(db)
+	authOptions := Options{JWTSecret: []byte("secret")}
+	handler := New(repo, mockFileStorage, authOptions)
+	ts := httptest.NewServer(handler)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+
+	var workspaceID1 int64 = 1
+	var workspaceID2 int64 = 2
+	urlWorkspace1 := createWsUrlWithAuth(t, ts.URL, workspaceID1, authOptions.JWTSecret)
+	urlWorkspace2 := createWsUrlWithAuth(t, ts.URL, workspaceID2, authOptions.JWTSecret)
+
+	//nolint:bodyclose
+	senderWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
+	require.NoError(t, err)
+
+	//nolint:bodyclose
+	reciverWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
+	require.NoError(t, err)
+
+	//nolint:bodyclose
+	reciverWorkspace2, _, err := websocket.Dial(ctx, urlWorkspace2, nil)
+	require.NoError(t, err)
+
+	msg := EventMessage{
+		WsMessageHeader: WsMessageHeader{
+			Type:   CreateEventType,
+			FileId: 1,
+		},
+		ObjectType: "file",
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(3)
+
+	// check that only ws on same workspace recive the event
+
+	go func() {
+		// the sender should not recive any message
+		var recMsg EventMessage
+		err := wsjson.Read(ctx, senderWorkspace1, &recMsg)
+		assert.Error(t, err)
+
+		wg.Done()
+	}()
+
+	go func() {
+		// the reciver on other workspace should not recive any message
+		var recMsg EventMessage
+		err := wsjson.Read(ctx, reciverWorkspace2, &recMsg)
+		assert.Error(t, err)
+
+		wg.Done()
+	}()
+
+	go func() {
+		// the reciver on the same workspace should recive the message
+		var recMsg EventMessage
+		err := wsjson.Read(ctx, reciverWorkspace1, &recMsg)
+		assert.NoError(t, err)
+		assert.Equal(t, msg, recMsg)
+
+		wg.Done()
+	}()
+
+	assert.NoError(t, wsjson.Write(ctx, senderWorkspace1, msg))
+
+	wg.Wait()
+
+	t.Cleanup(func() {
+		cancel()
+		senderWorkspace1.Close(websocket.StatusNormalClosure, "")
+		reciverWorkspace1.Close(websocket.StatusNormalClosure, "")
+		reciverWorkspace2.Close(websocket.StatusNormalClosure, "")
 		ts.Close()
 		handler.Close()
 	})

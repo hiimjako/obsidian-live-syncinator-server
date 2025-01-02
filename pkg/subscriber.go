@@ -28,16 +28,16 @@ type subscriber struct {
 	chunkMsgQueue  chan ChunkMessage
 	eventMsgQueue  chan EventMessage
 	closeSlow      func()
-	onChunkMessage func(ChunkMessage)
-	onEventMessage func(EventMessage)
+	onChunkMessage func(*subscriber, ChunkMessage)
+	onEventMessage func(*subscriber, EventMessage)
 }
 
 func NewSubscriber(
 	ctx context.Context,
 	w http.ResponseWriter,
 	r *http.Request,
-	onChunkMessage func(ChunkMessage),
-	onEventMessage func(EventMessage),
+	onChunkMessage func(*subscriber, ChunkMessage),
+	onEventMessage func(*subscriber, EventMessage),
 ) (*subscriber, error) {
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"127.0.0.1", "obsidian.md"},
@@ -111,9 +111,7 @@ func (s *subscriber) Listen() {
 					continue
 				}
 
-				chunk.SenderId = s.clientID
-
-				s.onChunkMessage(chunk)
+				s.onChunkMessage(s, chunk)
 			case RenameEventType, CreateEventType, DeleteEventType:
 				var event EventMessage
 				err := mapToStruct(msg, &event)
@@ -122,9 +120,7 @@ func (s *subscriber) Listen() {
 					continue
 				}
 
-				event.SenderId = s.clientID
-
-				s.onEventMessage(event)
+				s.onEventMessage(s, event)
 			}
 		}
 	}()
@@ -134,19 +130,11 @@ func (s *subscriber) Listen() {
 		for {
 			select {
 			case chunkMsg := <-s.chunkMsgQueue:
-				if chunkMsg.SenderId == s.clientID {
-					continue
-				}
-
 				err := s.WriteMessage(chunkMsg, time.Second*1)
 				if err != nil {
 					log.Println("error writing message to client", err)
 				}
 			case eventMsg := <-s.eventMsgQueue:
-				if eventMsg.SenderId == s.clientID {
-					continue
-				}
-
 				err := s.WriteMessage(eventMsg, time.Second*1)
 				if err != nil {
 					log.Println("error writing message to client", err)

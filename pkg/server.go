@@ -51,7 +51,6 @@ type syncinator struct {
 	subscribers    map[*subscriber]struct{}
 	files          map[int64]CachedFile
 	storageQueue   chan ChunkMessage
-	eventQueue     chan EventMessage
 	storage        filestorage.Storage
 	db             *repository.Queries
 }
@@ -72,7 +71,6 @@ func New(db *repository.Queries, fs filestorage.Storage, opts Options) *syncinat
 		subscribers:    make(map[*subscriber]struct{}),
 		files:          make(map[int64]CachedFile),
 		storageQueue:   make(chan ChunkMessage, 128),
-		eventQueue:     make(chan EventMessage, 128),
 		storage:        fs,
 		db:             db,
 	}
@@ -81,7 +79,7 @@ func New(db *repository.Queries, fs filestorage.Storage, opts Options) *syncinat
 
 	s.serverMux.Handle(PathHttpApi+"/", http.StripPrefix(PathHttpApi, s.apiHandler()))
 	s.serverMux.Handle(PathHttpAuth+"/", http.StripPrefix(PathHttpAuth, s.authHandler()))
-	s.serverMux.Handle(PathWebSocket+"/", http.StripPrefix(PathWebSocket, s.wsHandler()))
+	s.serverMux.Handle(PathWebSocket, s.wsHandler())
 
 	go s.internalBusProcessor()
 

@@ -21,9 +21,8 @@ const (
 )
 
 type WsMessageHeader struct {
-	SenderId string      `json:"-"`
-	FileId   int64       `json:"fileId"`
-	Type     MessageType `json:"type"`
+	FileId int64       `json:"fileId"`
+	Type   MessageType `json:"type"`
 }
 
 type EventMessage struct {
@@ -73,16 +72,18 @@ func (s *syncinator) subscribe(w http.ResponseWriter, r *http.Request) error {
 	s.addSubscriber(sub)
 	defer s.deleteSubscriber(sub)
 
+	log.Printf("client %s disconnected", sub.clientID)
+
 	sub.Listen()
 
 	return nil
 }
 
-func (s *syncinator) onEventMessage(event EventMessage) {
-	s.broadcastEventMessage(event)
+func (s *syncinator) onEventMessage(sender *subscriber, event EventMessage) {
+	s.broadcastMessage(sender, event)
 }
 
-func (s *syncinator) onChunkMessage(data ChunkMessage) {
+func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -98,48 +99,51 @@ func (s *syncinator) onChunkMessage(data ChunkMessage) {
 
 	if len(diffs) > 0 {
 		s.storageQueue <- data
-		s.broadcastChunkMessage(ChunkMessage{
+		s.broadcastMessage(sender, ChunkMessage{
 			WsMessageHeader: data.WsMessageHeader,
 			Chunks:          diffs,
 		})
 	}
 }
 
-// broadcastPublish publishes the msg to all subscribers.
-// It never blocks and so messages to slow subscribers
-// are dropped.
-func (s *syncinator) broadcastChunkMessage(msg ChunkMessage) {
+func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
+	if sender == nil {
+		log.Println("broadcasting with nil sender")
+		return
+	}
+
 	s.subscribersMu.Lock()
 	defer s.subscribersMu.Unlock()
 
 	err := s.publishLimiter.Wait(context.Background())
 	if err != nil {
-		log.Print(err)
+		log.Println(err)
 	}
 
-	for s := range s.subscribers {
-		select {
-		case s.chunkMsgQueue <- msg:
-		default:
-			go s.closeSlow()
+	for sub := range s.subscribers {
+		isSameWorkspace := sub.workspaceID == sender.workspaceID
+		isSameClient := sub.clientID == sender.clientID
+		shouldSend := isSameWorkspace && !isSameClient
+
+		if !shouldSend {
+			continue
 		}
-	}
-}
 
-func (s *syncinator) broadcastEventMessage(msg EventMessage) {
-	s.subscribersMu.Lock()
-	defer s.subscribersMu.Unlock()
-
-	err := s.publishLimiter.Wait(context.Background())
-	if err != nil {
-		log.Print(err)
-	}
-
-	for s := range s.subscribers {
-		select {
-		case s.eventMsgQueue <- msg:
+		switch m := msg.(type) {
+		case ChunkMessage:
+			select {
+			case sub.chunkMsgQueue <- m:
+			default:
+				go sub.closeSlow()
+			}
+		case EventMessage:
+			select {
+			case sub.eventMsgQueue <- m:
+			default:
+				go sub.closeSlow()
+			}
 		default:
-			go s.closeSlow()
+			log.Printf("Unknown message type: %T\n", msg)
 		}
 	}
 }
@@ -165,8 +169,6 @@ func (s *syncinator) internalBusProcessor() {
 					log.Println(err)
 				}
 			}
-		case event := <-s.eventQueue:
-			s.broadcastEventMessage(event)
 		case <-s.ctx.Done():
 			return
 		}
