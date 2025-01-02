@@ -8,6 +8,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/hiimjako/syncinator/pkg/diff"
+	"github.com/hiimjako/syncinator/pkg/middleware"
 )
 
 type MessageType = int
@@ -36,7 +37,19 @@ type ChunkMessage struct {
 	Chunks []diff.DiffChunk `json:"chunks"`
 }
 
-func (s *syncinator) wsHandler(w http.ResponseWriter, r *http.Request) {
+func (s *syncinator) wsHandler() http.Handler {
+	router := http.NewServeMux()
+	router.HandleFunc("GET /", s.createSubscriber)
+
+	stack := middleware.CreateStack(
+		middleware.IsAuthenticated(middleware.AuthOptions{SecretKey: s.jwtSecret}, middleware.ExtractWsToken),
+	)
+
+	routerWithStack := stack(router)
+	return routerWithStack
+}
+
+func (s *syncinator) createSubscriber(w http.ResponseWriter, r *http.Request) {
 	err := s.subscribe(w, r)
 	if errors.Is(err, context.Canceled) {
 		return

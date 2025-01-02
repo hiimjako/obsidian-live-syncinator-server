@@ -81,7 +81,7 @@ func New(db *repository.Queries, fs filestorage.Storage, opts Options) *syncinat
 
 	s.serverMux.Handle(PathHttpApi+"/", http.StripPrefix(PathHttpApi, s.apiHandler()))
 	s.serverMux.Handle(PathHttpAuth+"/", http.StripPrefix(PathHttpAuth, s.authHandler()))
-	s.serverMux.HandleFunc(PathWebSocket, s.wsHandler)
+	s.serverMux.Handle(PathWebSocket+"/", http.StripPrefix(PathWebSocket, s.wsHandler()))
 
 	go s.internalBusProcessor()
 

@@ -37,17 +37,33 @@ func writeUnauthed(w http.ResponseWriter) {
 	}
 }
 
-func IsAuthenticated(ao AuthOptions) func(next http.Handler) http.Handler {
+type JWTTokenExtractor func(*http.Request) (string, error)
+
+func ExtractBearerToken(r *http.Request) (string, error) {
+	authorization := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authorization, "Bearer ") {
+		return "", fmt.Errorf("missing or invalid Authorization header")
+	}
+	return strings.TrimPrefix(authorization, "Bearer "), nil
+}
+
+func ExtractWsToken(r *http.Request) (string, error) {
+	token := r.URL.Query().Get("jwt")
+	if token == "" {
+		return "", fmt.Errorf("missing JWT query parameter")
+	}
+	return token, nil
+}
+
+func IsAuthenticated(ao AuthOptions, tokenExtractor JWTTokenExtractor) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authorization := r.Header.Get("Authorization")
-
-			if !strings.HasPrefix(authorization, "Bearer ") {
+			encodedToken, err := tokenExtractor(r)
+			if err != nil {
 				writeUnauthed(w)
 				return
 			}
 
-			encodedToken := strings.TrimPrefix(authorization, "Bearer ")
 			workspaceID, err := VerifyToken(ao, encodedToken)
 			if err != nil {
 				writeUnauthed(w)

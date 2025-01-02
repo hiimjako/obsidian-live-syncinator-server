@@ -13,6 +13,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/google/uuid"
+	"github.com/hiimjako/syncinator/pkg/middleware"
 )
 
 type subscriber struct {
@@ -22,7 +23,8 @@ type subscriber struct {
 	ctx  context.Context
 
 	isConnected    atomic.Bool
-	clientId       string
+	clientID       string
+	workspaceID    int64
 	chunkMsgQueue  chan ChunkMessage
 	eventMsgQueue  chan EventMessage
 	closeSlow      func()
@@ -45,6 +47,8 @@ func NewSubscriber(
 	}
 
 	const subscriberMessageBuffer = 8
+	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+
 	s := &subscriber{
 		conn:          c,
 		w:             w,
@@ -53,7 +57,8 @@ func NewSubscriber(
 		isConnected:   atomic.Bool{},
 		chunkMsgQueue: make(chan ChunkMessage, subscriberMessageBuffer),
 		eventMsgQueue: make(chan EventMessage, subscriberMessageBuffer),
-		clientId:      uuid.New().String(),
+		workspaceID:   workspaceID,
+		clientID:      uuid.New().String(),
 		closeSlow: func() {
 			if c != nil {
 				c.Close(websocket.StatusPolicyViolation, "connection too slow to keep up with messages")
@@ -106,7 +111,7 @@ func (s *subscriber) Listen() {
 					continue
 				}
 
-				chunk.SenderId = s.clientId
+				chunk.SenderId = s.clientID
 
 				s.onChunkMessage(chunk)
 			case RenameEventType, CreateEventType, DeleteEventType:
@@ -117,7 +122,7 @@ func (s *subscriber) Listen() {
 					continue
 				}
 
-				event.SenderId = s.clientId
+				event.SenderId = s.clientID
 
 				s.onEventMessage(event)
 			}
@@ -129,7 +134,7 @@ func (s *subscriber) Listen() {
 		for {
 			select {
 			case chunkMsg := <-s.chunkMsgQueue:
-				if chunkMsg.SenderId == s.clientId {
+				if chunkMsg.SenderId == s.clientID {
 					continue
 				}
 
@@ -138,7 +143,7 @@ func (s *subscriber) Listen() {
 					log.Println("error writing message to client", err)
 				}
 			case eventMsg := <-s.eventMsgQueue:
-				if eventMsg.SenderId == s.clientId {
+				if eventMsg.SenderId == s.clientID {
 					continue
 				}
 
@@ -166,7 +171,7 @@ func (s *subscriber) ParseChunkMessage() (ChunkMessage, error) {
 	if err != nil {
 		if websocket.CloseStatus(err) != -1 || strings.Contains(err.Error(), "EOF") {
 			s.Close()
-			return data, fmt.Errorf("client %s disconnected", s.clientId)
+			return data, fmt.Errorf("client %s disconnected", s.clientID)
 		}
 
 		return data, err
@@ -182,7 +187,7 @@ func (s *subscriber) ParseEventMessage() (EventMessage, error) {
 	if err != nil {
 		if websocket.CloseStatus(err) != -1 || strings.Contains(err.Error(), "EOF") {
 			s.Close()
-			return data, fmt.Errorf("client %s disconnected", s.clientId)
+			return data, fmt.Errorf("client %s disconnected", s.clientID)
 		}
 
 		return data, err
@@ -207,7 +212,7 @@ func (s *subscriber) WaitMessage() (map[string]any, error) {
 	if err != nil {
 		if websocket.CloseStatus(err) != -1 || strings.Contains(err.Error(), "EOF") {
 			s.Close()
-			return msg, fmt.Errorf("client %s disconnected", s.clientId)
+			return msg, fmt.Errorf("client %s disconnected", s.clientID)
 		}
 
 		return msg, err

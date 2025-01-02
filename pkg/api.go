@@ -51,7 +51,7 @@ func (s *syncinator) apiHandler() http.Handler {
 			AllowedMethods: []string{"HEAD", "GET", "POST", "OPTIONS", "DELETE", "PATCH"},
 			AllowedHeaders: []string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Authorization"},
 		}),
-		middleware.IsAuthenticated(middleware.AuthOptions{SecretKey: s.jwtSecret}),
+		middleware.IsAuthenticated(middleware.AuthOptions{SecretKey: s.jwtSecret}, middleware.ExtractBearerToken),
 	)
 
 	routerWithStack := stack(router)
