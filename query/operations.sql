@@ -14,3 +14,8 @@ FROM operations o
 JOIN files f ON o.file_id = f.id
 WHERE o.file_id = ? AND o.version > ? AND f.workspace_id = ?
 ORDER BY o.version ASC;
+
+-- name: DeleteOperationOlderThan :exec
+DELETE FROM operations
+WHERE created_at < ?;
+

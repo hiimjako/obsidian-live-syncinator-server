@@ -7,6 +7,7 @@ package repository
 
 import (
 	"context"
+	"time"
 )
 
 const createOperation = `-- name: CreateOperation :exec
@@ -22,6 +23,16 @@ type CreateOperationParams struct {
 
 func (q *Queries) CreateOperation(ctx context.Context, arg CreateOperationParams) error {
 	_, err := q.db.ExecContext(ctx, createOperation, arg.FileID, arg.Version, arg.Operation)
+	return err
+}
+
+const deleteOperationOlderThan = `-- name: DeleteOperationOlderThan :exec
+DELETE FROM operations
+WHERE created_at < ?
+`
+
+func (q *Queries) DeleteOperationOlderThan(ctx context.Context, createdAt time.Time) error {
+	_, err := q.db.ExecContext(ctx, deleteOperationOlderThan, createdAt)
 	return err
 }
 

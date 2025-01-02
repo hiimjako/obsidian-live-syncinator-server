@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/hiimjako/syncinator/internal/repository"
@@ -164,6 +165,18 @@ func (s *syncinator) internalBusProcessor() {
 			}
 		case <-s.ctx.Done():
 			return
+		}
+	}
+}
+
+// deleteOldOperations is a routine to delete old operation from "operations" table
+func (s *syncinator) deleteOldOperations() {
+	ticker := time.NewTicker(10 * time.Minute)
+	for {
+		<-ticker.C
+		err := s.db.DeleteOperationOlderThan(s.ctx, time.Now().Add(-s.operationMaxAge))
+		if err != nil {
+			log.Println("error while removing old operations", err)
 		}
 	}
 }

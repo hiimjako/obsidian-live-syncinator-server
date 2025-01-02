@@ -22,13 +22,18 @@ const (
 )
 
 type Options struct {
-	JWTSecret   []byte
-	MaxFileSize int64
+	JWTSecret       []byte
+	MaxFileSize     int64
+	OperationMaxAge time.Duration
 }
 
 func (o *Options) Default() {
 	if o.MaxFileSize <= 0 {
 		o.MaxFileSize = 10 << 20 // 10 MB
+	}
+
+	if o.OperationMaxAge <= 0 {
+		o.OperationMaxAge = 12 * time.Hour
 	}
 }
 
@@ -42,8 +47,9 @@ type syncinator struct {
 	cancel context.CancelFunc
 	mut    sync.Mutex
 
-	jwtSecret   []byte
-	maxFileSize int64
+	jwtSecret       []byte
+	maxFileSize     int64
+	operationMaxAge time.Duration
 
 	publishLimiter *rate.Limiter
 	serverMux      *http.ServeMux
@@ -63,8 +69,9 @@ func New(db *repository.Queries, fs filestorage.Storage, opts Options) *syncinat
 		ctx:    ctx,
 		cancel: cancel,
 
-		jwtSecret:   opts.JWTSecret,
-		maxFileSize: opts.MaxFileSize,
+		jwtSecret:       opts.JWTSecret,
+		maxFileSize:     opts.MaxFileSize,
+		operationMaxAge: opts.OperationMaxAge,
 
 		serverMux:      http.NewServeMux(),
 		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),
@@ -82,6 +89,7 @@ func New(db *repository.Queries, fs filestorage.Storage, opts Options) *syncinat
 	s.serverMux.Handle(PathWebSocket, s.wsHandler())
 
 	go s.internalBusProcessor()
+	go s.deleteOldOperations()
 
 	return s
 }
