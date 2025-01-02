@@ -69,7 +69,7 @@ func pollText(s *screen.Screen) {
 			err = wsjson.Read(ctx, ws, &msg)
 			logOnError(err)
 
-			if msg.FileId != int64(*fileId) {
+			if msg.FileID != int64(*fileId) {
 				continue
 			}
 
@@ -96,7 +96,7 @@ func pollText(s *screen.Screen) {
 
 			err = wsjson.Write(ctx, ws, rtsync.ChunkMessage{
 				WsMessageHeader: rtsync.WsMessageHeader{
-					FileId: int64(*fileId),
+					FileID: int64(*fileId),
 				},
 				Chunks: d,
 			})

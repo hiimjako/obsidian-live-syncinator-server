@@ -12,9 +12,11 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/internal/requestutils"
+	"github.com/hiimjako/syncinator/pkg/diff"
 	"github.com/hiimjako/syncinator/pkg/filestorage"
 	"github.com/hiimjako/syncinator/pkg/middleware"
 )
@@ -27,6 +29,13 @@ const (
 
 type UpdateFileBody struct {
 	Path string `json:"path"`
+}
+
+type Operation struct {
+	FileID    int64            `json:"fileId"`
+	Version   int64            `json:"version"`
+	Operation []diff.DiffChunk `json:"operation"`
+	CreatedAt time.Time        `json:"createdAt"`
 }
 
 const (
@@ -43,6 +52,7 @@ func (s *syncinator) apiHandler() http.Handler {
 	router.HandleFunc("POST /file", s.createFileHandler)
 	router.HandleFunc("DELETE /file/{id}", s.deleteFileHandler)
 	router.HandleFunc("PATCH /file/{id}", s.updateFileHandler)
+	router.HandleFunc("GET /operation", s.listOperationsHandler)
 
 	stack := middleware.CreateStack(
 		middleware.Logging,
@@ -70,6 +80,54 @@ func (s *syncinator) listFilesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(files); err != nil {
+		http.Error(w, "error reading request body", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *syncinator) listOperationsHandler(w http.ResponseWriter, r *http.Request) {
+	fromVersion, err := strconv.Atoi(r.URL.Query().Get("from"))
+	if fromVersion < 0 || err != nil {
+		http.Error(w, "invalid \"from version\"", http.StatusBadRequest)
+		return
+	}
+
+	fileID, err := strconv.Atoi(r.URL.Query().Get("fileId"))
+	if fromVersion < 0 || err != nil {
+		http.Error(w, "invalid \"fileId\"", http.StatusBadRequest)
+		return
+	}
+
+	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	dbOperations, err := s.db.FetchFileOperationsFromVersion(r.Context(), repository.FetchFileOperationsFromVersionParams{
+		FileID:      int64(fileID),
+		Version:     int64(fromVersion),
+		WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	operations := make([]Operation, len(dbOperations))
+	for i := 0; i < len(operations); i++ {
+		var chunks []diff.DiffChunk
+		err := json.Unmarshal([]byte(dbOperations[i].Operation), &chunks)
+		if err != nil {
+			continue
+		}
+
+		operations[i] = Operation{
+			FileID:    dbOperations[i].FileID,
+			Version:   dbOperations[i].Version,
+			Operation: chunks,
+			CreatedAt: dbOperations[i].CreatedAt,
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(operations); err != nil {
 		http.Error(w, "error reading request body", http.StatusInternalServerError)
 		return
 	}

@@ -2,6 +2,7 @@ package rtsync
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/internal/testutils"
+	"github.com/hiimjako/syncinator/pkg/diff"
 	"github.com/hiimjako/syncinator/pkg/filestorage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -634,4 +636,104 @@ func Test_updateFileHandler(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, filepath, file.WorkspacePath)
 	})
+}
+
+func Test_listOperationsHandler(t *testing.T) {
+	mockFileStorage := new(filestorage.MockFileStorage)
+	db := testutils.CreateDB(t)
+	repo := repository.New(db)
+	options := Options{JWTSecret: []byte("secret")}
+	server := New(repo, mockFileStorage, options)
+
+	t.Cleanup(func() { server.Close() })
+
+	workspaceID := int64(10)
+	fileID := int64(1)
+
+	filesToInsert := []struct {
+		file        []byte
+		filepath    string
+		workspaceID int64
+	}{
+		{
+			file:        []byte("here a new file 1!"),
+			filepath:    "/home/file/1",
+			workspaceID: workspaceID,
+		},
+		{
+			file:        []byte("here a new file 2!"),
+			filepath:    "/home/file/2",
+			workspaceID: 2,
+		},
+	}
+
+	for _, f := range filesToInsert {
+		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).Return(f.filepath, nil).Once()
+
+		form, contentType := testutils.CreateMultipart(t, f.filepath, f.file, false)
+		res, _ := testutils.DoRequest[repository.File](
+			t,
+			server,
+			http.MethodPost,
+			PathHttpApi+"/file",
+			form,
+			testutils.WithAuthHeader(options.JWTSecret, f.workspaceID),
+			testutils.WithContentTypeHeader(contentType),
+		)
+		assert.Equal(t, http.StatusCreated, res.Code)
+	}
+
+	chunks := []diff.DiffChunk{
+		{
+			Type:     diff.DiffAdd,
+			Position: 1,
+			Text:     "foo",
+			Len:      3,
+		},
+		{
+			Type:     diff.DiffRemove,
+			Position: 1,
+			Text:     "bar",
+			Len:      3,
+		},
+	}
+	chunksJson, err := json.Marshal(chunks)
+	require.NoError(t, err)
+
+	operationsToInsert := []struct {
+		fileID    int64
+		Version   int64
+		Operation string
+	}{
+		{fileID: fileID, Version: 1, Operation: string(chunksJson)},
+		{fileID: fileID, Version: 2, Operation: string(chunksJson)},
+		{fileID: 2, Version: 2, Operation: string(chunksJson)},
+	}
+
+	for _, o := range operationsToInsert {
+		err := repo.CreateOperation(context.Background(), repository.CreateOperationParams{
+			FileID:    o.fileID,
+			Version:   o.Version,
+			Operation: o.Operation,
+		})
+		require.NoError(t, err)
+	}
+
+	// fetch files
+	res, body := testutils.DoRequest[[]Operation](
+		t,
+		server,
+		http.MethodGet,
+		PathHttpApi+"/operation?from=1&fileId="+strconv.Itoa(int(fileID)),
+		nil,
+		testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+	)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Len(t, body, 1)
+	assert.Equal(t, Operation{
+		FileID:    fileID,
+		Version:   2,
+		Operation: chunks,
+		CreatedAt: body[0].CreatedAt,
+	}, body[0])
 }

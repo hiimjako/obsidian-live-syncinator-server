@@ -122,7 +122,7 @@ func Test_handleChunk(t *testing.T) {
 	msg := ChunkMessage{
 		WsMessageHeader: WsMessageHeader{
 			Type:   ChunkEventType,
-			FileId: file.ID,
+			FileID: file.ID,
 		},
 		Version: 0,
 		Chunks: []diff.DiffChunk{
@@ -191,15 +191,16 @@ func Test_handleChunk(t *testing.T) {
 	operations, err := repo.FetchFileOperationsFromVersion(
 		context.Background(),
 		repository.FetchFileOperationsFromVersionParams{
-			FileID:  file.ID,
-			Version: 0,
+			FileID:      file.ID,
+			Version:     0,
+			WorkspaceID: workspaceID1,
 		},
 	)
 	assert.NoError(t, err)
 	require.Len(t, operations, 1)
 
 	msg.Version = 1
-	operationJson, err := json.Marshal(msg)
+	operationJson, err := json.Marshal(msg.Chunks)
 	require.NoError(t, err)
 
 	assert.Equal(t, repository.Operation{
@@ -250,7 +251,7 @@ func Test_handleEvent(t *testing.T) {
 	msg := EventMessage{
 		WsMessageHeader: WsMessageHeader{
 			Type:   CreateEventType,
-			FileId: 1,
+			FileID: 1,
 		},
 		ObjectType: "file",
 	}

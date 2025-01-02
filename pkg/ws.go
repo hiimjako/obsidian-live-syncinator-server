@@ -23,7 +23,7 @@ const (
 )
 
 type WsMessageHeader struct {
-	FileId int64       `json:"fileId"`
+	FileID int64       `json:"fileId"`
 	Type   MessageType `json:"type"`
 }
 
@@ -90,7 +90,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	file := s.files[data.FileId]
+	file := s.files[data.FileID]
 	localCopy := file.Content
 	for _, d := range data.Chunks {
 		localCopy = diff.ApplyDiff(localCopy, d)
@@ -100,7 +100,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	data.Version += 1
 	file.Version += 1
 	file.Content = localCopy
-	s.files[data.FileId] = file
+	s.files[data.FileID] = file
 
 	if len(diffs) > 0 {
 		s.storageQueue <- data
@@ -169,7 +169,7 @@ func (s *syncinator) internalBusProcessor() {
 }
 
 func (s *syncinator) applyChunkToFile(chunkMsg ChunkMessage) error {
-	file, err := s.db.FetchFile(s.ctx, chunkMsg.FileId)
+	file, err := s.db.FetchFile(s.ctx, chunkMsg.FileID)
 	if err != nil {
 		return err
 	}
@@ -182,11 +182,11 @@ func (s *syncinator) applyChunkToFile(chunkMsg ChunkMessage) error {
 		}
 	}
 
-	operation, err := json.Marshal(chunkMsg)
+	operation, err := json.Marshal(chunkMsg.Chunks)
 	if err != nil {
 		return err
 	}
-	_, err = s.db.CreateOperation(s.ctx, repository.CreateOperationParams{
+	err = s.db.CreateOperation(s.ctx, repository.CreateOperationParams{
 		FileID:    file.ID,
 		Version:   chunkMsg.Version,
 		Operation: string(operation),
@@ -196,7 +196,7 @@ func (s *syncinator) applyChunkToFile(chunkMsg ChunkMessage) error {
 	}
 
 	err = s.db.UpdateFileVersion(s.ctx, repository.UpdateFileVersionParams{
-		ID:      chunkMsg.FileId,
+		ID:      chunkMsg.FileID,
 		Version: chunkMsg.Version,
 	})
 	if err != nil {
