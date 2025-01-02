@@ -75,125 +75,96 @@ func TestComputeDiff(t *testing.T) {
 }
 
 func TestApplyDiff(t *testing.T) {
-	t.Run("should apply diffs", func(t *testing.T) {
-		tests := []struct {
-			name     string
-			text     string
-			expected string
-		}{
-			{
-				name:     "add a chunk",
-				text:     "hello!",
-				expected: "hello world!",
-			},
-			{
-				name:     "add a chunk from empty string",
-				text:     "",
-				expected: " world",
-			},
-			{
-				name:     "add a chunk from 0",
-				text:     "",
-				expected: "test",
-			},
-			{
-				name:     "remove a chunk",
-				text:     "hello world!",
-				expected: "helloworld!",
-			},
-			{
-				name:     "remove a chunk from 0",
-				text:     "test",
-				expected: "",
-			},
-			{
-				name:     "add in middle of word",
-				text:     "wold",
-				expected: "world",
-			},
-		}
+	tests := []struct {
+		name     string
+		text     string
+		diff     DiffChunk
+		expected string
+	}{
+		{
+			name:     "Add text at the beginning",
+			text:     "Hello",
+			diff:     DiffChunk{Type: DiffAdd, Position: 0, Text: "Hi "},
+			expected: "Hi Hello",
+		},
+		{
+			name:     "Add text in the middle",
+			text:     "Hello",
+			diff:     DiffChunk{Type: DiffAdd, Position: 3, Text: " there"},
+			expected: "Hel therelo",
+		},
+		{
+			name:     "Add text at the end",
+			text:     "Hello",
+			diff:     DiffChunk{Type: DiffAdd, Position: 5, Text: " World"},
+			expected: "Hello World",
+		},
+		{
+			name:     "Add text beyond the end",
+			text:     "Hello",
+			diff:     DiffChunk{Type: DiffAdd, Position: 10, Text: "!!!"},
+			expected: "Hello!!!",
+		},
+		{
+			name:     "Remove text from the beginning",
+			text:     "Hello",
+			diff:     DiffChunk{Type: DiffRemove, Position: 0, Len: 3},
+			expected: "lo",
+		},
+		{
+			name:     "Remove text from the middle",
+			text:     "Hello",
+			diff:     DiffChunk{Type: DiffRemove, Position: 1, Len: 3},
+			expected: "Ho",
+		},
+		{
+			name:     "Remove text from the end",
+			text:     "Hello",
+			diff:     DiffChunk{Type: DiffRemove, Position: 2, Len: 3},
+			expected: "He",
+		},
+		{
+			name:     "Remove text beyond the end",
+			text:     "Hello",
+			diff:     DiffChunk{Type: DiffRemove, Position: 3, Len: 10},
+			expected: "Hel",
+		},
+		{
+			name:     "Remove text when position is beyond text length",
+			text:     "Hello",
+			diff:     DiffChunk{Type: DiffRemove, Position: 10, Len: 3},
+			expected: "Hello",
+		},
+		{
+			name:     "Remove no text (empty diff)",
+			text:     "Hello",
+			diff:     DiffChunk{Type: DiffRemove, Position: 0, Len: 0},
+			expected: "Hello",
+		},
+		{
+			name:     "Add to empty string",
+			text:     "",
+			diff:     DiffChunk{Type: DiffAdd, Position: 0, Text: "Hello"},
+			expected: "Hello",
+		},
+		{
+			name:     "Remove from empty string",
+			text:     "",
+			diff:     DiffChunk{Type: DiffRemove, Position: 0, Len: 3},
+			expected: "",
+		},
+		{
+			name:     "Add to empty string beyond length",
+			text:     "",
+			diff:     DiffChunk{Type: DiffAdd, Position: 10, Text: "Hello"},
+			expected: "Hello",
+		},
+	}
 
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				s := tt.text
-				diffs := ComputeDiff(tt.text, tt.expected)
-				for _, d := range diffs {
-					s = ApplyDiff(s, d)
-				}
-				assert.Equal(t, tt.expected, s)
-			})
-		}
-	})
-
-	t.Run("should handle edge cases", func(t *testing.T) {
-		tests := []struct {
-			name     string
-			text     string
-			expected string
-			diffs    []DiffChunk
-		}{
-			{
-				name:     "remove a chunk from empty string",
-				text:     "",
-				expected: "",
-				diffs: []DiffChunk{
-					{
-						Type:     DiffRemove,
-						Position: 10,
-						Text:     "test",
-						Len:      4,
-					},
-				},
-			},
-			{
-				name:     "chunk with long len",
-				text:     "lorem",
-				expected: "lo",
-				diffs: []DiffChunk{
-					{
-						Type:     DiffRemove,
-						Position: 2,
-						Text:     "rem ipsum",
-						Len:      9,
-					},
-				},
-			},
-			{
-				name:     "chunk with high position",
-				text:     "hi",
-				expected: "hi",
-				diffs: []DiffChunk{
-					{
-						Type:     DiffRemove,
-						Position: 3,
-						Text:     "hello",
-						Len:      5,
-					},
-				},
-			},
-			{
-				name:     "chunk with high position at beginning",
-				text:     "hi",
-				expected: "",
-				diffs: []DiffChunk{
-					{
-						Type:     DiffRemove,
-						Position: 0,
-						Text:     "hello",
-						Len:      5,
-					},
-				},
-			},
-		}
-
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				s := tt.text
-				for _, d := range tt.diffs {
-					s = ApplyDiff(s, d)
-				}
-				assert.Equal(t, tt.expected, s)
-			})
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ApplyDiff(tt.text, tt.diff)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
