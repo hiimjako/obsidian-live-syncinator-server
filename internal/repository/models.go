@@ -21,6 +21,13 @@ type File struct {
 	WorkspaceID   int64     `json:"workspaceId"`
 }
 
+type Operation struct {
+	FileID    int64     `json:"fileId"`
+	Version   int64     `json:"version"`
+	Operation string    `json:"operation"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type Workspace struct {
 	ID        int64        `json:"id"`
 	Name      string       `json:"name"`

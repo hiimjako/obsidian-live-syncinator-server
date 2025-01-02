@@ -2,6 +2,7 @@ package rtsync
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -96,6 +97,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	}
 	diffs := diff.ComputeDiff(file.Content, localCopy)
 
+	data.Version += 1
 	file.Version += 1
 	file.Content = localCopy
 	s.files[data.FileId] = file
@@ -156,30 +158,52 @@ func (s *syncinator) internalBusProcessor() {
 	for {
 		select {
 		case chunkMsg := <-s.storageQueue:
-			for _, d := range chunkMsg.Chunks {
-				file, err := s.db.FetchFile(context.Background(), chunkMsg.FileId)
-				if err != nil {
-					log.Println(err)
-					return
-				}
-
-				err = s.storage.PersistChunk(file.DiskPath, d)
-				if err != nil {
-					log.Println(err)
-				}
-
-				err = s.db.UpdateFileVersion(context.Background(), repository.UpdateFileVersionParams{
-					ID:      chunkMsg.FileId,
-					Version: chunkMsg.Version + 1,
-				})
-				if err != nil {
-					log.Println(err)
-				}
+			err := s.applyChunkToFile(chunkMsg)
+			if err != nil {
+				log.Println(err)
 			}
 		case <-s.ctx.Done():
 			return
 		}
 	}
+}
+
+func (s *syncinator) applyChunkToFile(chunkMsg ChunkMessage) error {
+	file, err := s.db.FetchFile(s.ctx, chunkMsg.FileId)
+	if err != nil {
+		return err
+	}
+
+	// FIXME: add a rollback strategy
+	for _, d := range chunkMsg.Chunks {
+		err := s.storage.PersistChunk(file.DiskPath, d)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
+	operation, err := json.Marshal(chunkMsg)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.CreateOperation(s.ctx, repository.CreateOperationParams{
+		FileID:    file.ID,
+		Version:   chunkMsg.Version,
+		Operation: string(operation),
+	})
+	if err != nil {
+		return err
+	}
+
+	err = s.db.UpdateFileVersion(s.ctx, repository.UpdateFileVersionParams{
+		ID:      chunkMsg.FileId,
+		Version: chunkMsg.Version,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *syncinator) addSubscriber(sub *subscriber) {

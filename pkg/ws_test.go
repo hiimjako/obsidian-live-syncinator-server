@@ -2,6 +2,7 @@ package rtsync
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http/httptest"
 	"strings"
@@ -185,6 +186,28 @@ func Test_handleChunk(t *testing.T) {
 	assert.Equal(t, int64(1), handler.files[file.ID].Version)
 	assert.Equal(t, int64(1), updatedFile.Version)
 	assert.Greater(t, updatedFile.UpdatedAt, file.UpdatedAt)
+
+	// check operation history
+	operations, err := repo.FetchFileOperationsFromVersion(
+		context.Background(),
+		repository.FetchFileOperationsFromVersionParams{
+			FileID:  file.ID,
+			Version: 0,
+		},
+	)
+	assert.NoError(t, err)
+	require.Len(t, operations, 1)
+
+	msg.Version = 1
+	operationJson, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	assert.Equal(t, repository.Operation{
+		FileID:    file.ID,
+		Version:   1,
+		Operation: string(operationJson),
+		CreatedAt: operations[0].CreatedAt,
+	}, operations[0])
 
 	t.Cleanup(func() {
 		cancel()
