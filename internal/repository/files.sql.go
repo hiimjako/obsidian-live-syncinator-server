@@ -160,12 +160,17 @@ func (q *Queries) FetchFile(ctx context.Context, id int64) (File, error) {
 const fetchFileFromWorkspacePath = `-- name: FetchFileFromWorkspacePath :one
 SELECT id, disk_path, workspace_path, mime_type, hash, created_at, updated_at, version, workspace_id
 FROM files
-WHERE workspace_path = ?
+WHERE workspace_id = ? AND workspace_path = ?
 LIMIT 1
 `
 
-func (q *Queries) FetchFileFromWorkspacePath(ctx context.Context, workspacePath string) (File, error) {
-	row := q.db.QueryRowContext(ctx, fetchFileFromWorkspacePath, workspacePath)
+type FetchFileFromWorkspacePathParams struct {
+	WorkspaceID   int64  `json:"workspaceId"`
+	WorkspacePath string `json:"workspacePath"`
+}
+
+func (q *Queries) FetchFileFromWorkspacePath(ctx context.Context, arg FetchFileFromWorkspacePathParams) (File, error) {
+	row := q.db.QueryRowContext(ctx, fetchFileFromWorkspacePath, arg.WorkspaceID, arg.WorkspacePath)
 	var i File
 	err := row.Scan(
 		&i.ID,

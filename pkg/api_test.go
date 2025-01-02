@@ -352,6 +352,73 @@ func Test_createFileHandler(t *testing.T) {
 		// check mock assertions
 		mockFileStorage.AssertNumberOfCalls(t, "CreateObject", 1)
 	})
+
+	t.Run("should insert same path on different workspaces", func(t *testing.T) {
+		mockFileStorage := new(filestorage.MockFileStorage)
+		db := testutils.CreateDB(t)
+		repo := repository.New(db)
+		options := Options{JWTSecret: []byte("secret")}
+		server := New(repo, mockFileStorage, options)
+
+		t.Cleanup(func() { server.Close() })
+
+		var workspaceID1 int64 = 10
+		var workspaceID2 int64 = 11
+		filepath := "/home/file"
+		content := []byte("here a new file!")
+		diskPath1 := "/foo/bar"
+		diskPath2 := "/foo/baz"
+
+		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
+			Return(diskPath1, nil).
+			Once()
+
+		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
+			Return(diskPath2, nil).
+			Once()
+
+		// create
+		form, contentType := testutils.CreateMultipart(t, filepath, content, false)
+		res, _ := testutils.DoRequest[string](
+			t,
+			server,
+			http.MethodPost,
+			PathHttpApi+"/file",
+			form,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID1),
+			testutils.WithContentTypeHeader(contentType),
+		)
+		assert.Equal(t, http.StatusCreated, res.Code)
+
+		// create on second workspace
+		form, contentType = testutils.CreateMultipart(t, filepath, content, false)
+		res, _ = testutils.DoRequest[string](
+			t,
+			server,
+			http.MethodPost,
+			PathHttpApi+"/file",
+			form,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID2),
+			testutils.WithContentTypeHeader(contentType),
+		)
+
+		// check response
+		assert.Equal(t, http.StatusCreated, res.Code)
+
+		// check db
+		files, err := repo.FetchWorkspaceFiles(context.Background(), workspaceID1)
+		assert.NoError(t, err)
+		assert.Len(t, files, 1)
+		assert.Equal(t, diskPath1, files[0].DiskPath)
+
+		files, err = repo.FetchWorkspaceFiles(context.Background(), workspaceID2)
+		assert.NoError(t, err)
+		assert.Len(t, files, 1)
+		assert.Equal(t, diskPath2, files[0].DiskPath)
+
+		// check mock assertions
+		mockFileStorage.AssertNumberOfCalls(t, "CreateObject", 2)
+	})
 }
 
 // Test_deleteFileHandler tests the deleteFileHandler using mocked storage

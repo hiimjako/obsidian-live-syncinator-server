@@ -35,7 +35,7 @@ WHERE id = ?;
 -- name: FetchFileFromWorkspacePath :one
 SELECT *
 FROM files
-WHERE workspace_path = ?
+WHERE workspace_id = ? AND workspace_path = ?
 LIMIT 1;
 
 -- name: UpdateUpdatedAt :exec

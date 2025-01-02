@@ -31,8 +31,8 @@ type UpdateFileBody struct {
 
 const (
 	ErrDuplicateFile   = "duplicated file"
-	ErrInvalidFile     = "impossilbe to create file"
-	ErrReadingFile     = "impossilbe to read file"
+	ErrInvalidFile     = "impossible to create file"
+	ErrReadingFile     = "impossible to read file"
 	ErrNotExistingFile = "not existing file"
 )
 
@@ -153,6 +153,8 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
+	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+
 	if !requestutils.IsMultipartFormData(r) {
 		errMsg := fmt.Sprintf("Unsupported Content-Type %q", r.Header.Get("Content-Type"))
 		http.Error(w, errMsg, http.StatusUnsupportedMediaType)
@@ -179,7 +181,10 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// if there isn't any file an error is returned
-	_, err = s.db.FetchFileFromWorkspacePath(r.Context(), filepath)
+	_, err = s.db.FetchFileFromWorkspacePath(r.Context(), repository.FetchFileFromWorkspacePathParams{
+		WorkspaceID:   workspaceID,
+		WorkspacePath: filepath,
+	})
 	if err == nil {
 		http.Error(w, ErrDuplicateFile, http.StatusConflict)
 		return
@@ -206,7 +211,6 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 
 	mimeType := requestutils.DetectFileMimeType(fileReader)
 	hash := filestorage.GenerateHash(fileReader)
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
 
 	dbFile, err := s.db.CreateFile(r.Context(), repository.CreateFileParams{
 		DiskPath:      diskPath,
