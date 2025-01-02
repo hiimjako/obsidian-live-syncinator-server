@@ -1,11 +1,11 @@
-package rtsync
+package syncinator
 
 import (
 	"encoding/json"
 	"io"
 	"net/http"
 
-	"github.com/hiimjako/syncinator/pkg/middleware"
+	"github.com/hiimjako/syncinator/syncinator/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
 

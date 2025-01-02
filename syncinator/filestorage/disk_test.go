@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hiimjako/syncinator/pkg/diff"
+	"github.com/hiimjako/syncinator/syncinator/diff"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/hiimjako/syncinator/pkg/diff"
+	"github.com/hiimjako/syncinator/syncinator/diff"
 	"github.com/stretchr/testify/mock"
 )
 

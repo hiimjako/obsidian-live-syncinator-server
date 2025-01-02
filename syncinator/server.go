@@ -1,4 +1,4 @@
-package rtsync
+package syncinator
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/hiimjako/syncinator/internal/repository"
-	"github.com/hiimjako/syncinator/pkg/filestorage"
+	"github.com/hiimjako/syncinator/syncinator/filestorage"
 	"golang.org/x/time/rate"
 )
 

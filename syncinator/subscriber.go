@@ -1,4 +1,4 @@
-package rtsync
+package syncinator
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/google/uuid"
-	"github.com/hiimjako/syncinator/pkg/middleware"
+	"github.com/hiimjako/syncinator/syncinator/middleware"
 )
 
 type subscriber struct {

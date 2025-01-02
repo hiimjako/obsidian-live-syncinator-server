@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/hiimjako/syncinator/pkg/diff"
+	"github.com/hiimjako/syncinator/syncinator/diff"
 )
 
 type Disk struct {

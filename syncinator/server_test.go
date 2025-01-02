@@ -1,4 +1,4 @@
-package rtsync
+package syncinator
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/internal/testutils"
-	"github.com/hiimjako/syncinator/pkg/filestorage"
+	"github.com/hiimjako/syncinator/syncinator/filestorage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

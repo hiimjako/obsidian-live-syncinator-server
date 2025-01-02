@@ -1,4 +1,4 @@
-package rtsync
+package syncinator
 
 import (
 	"context"
@@ -14,9 +14,9 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/internal/testutils"
-	"github.com/hiimjako/syncinator/pkg/diff"
-	"github.com/hiimjako/syncinator/pkg/filestorage"
-	"github.com/hiimjako/syncinator/pkg/middleware"
+	"github.com/hiimjako/syncinator/syncinator/diff"
+	"github.com/hiimjako/syncinator/syncinator/filestorage"
+	"github.com/hiimjako/syncinator/syncinator/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 

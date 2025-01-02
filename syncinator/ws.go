@@ -1,4 +1,4 @@
-package rtsync
+package syncinator
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/hiimjako/syncinator/internal/repository"
-	"github.com/hiimjako/syncinator/pkg/diff"
-	"github.com/hiimjako/syncinator/pkg/middleware"
+	"github.com/hiimjako/syncinator/syncinator/diff"
+	"github.com/hiimjako/syncinator/syncinator/middleware"
 )
 
 type MessageType = int

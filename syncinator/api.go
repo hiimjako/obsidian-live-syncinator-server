@@ -1,4 +1,4 @@
-package rtsync
+package syncinator
 
 import (
 	"bytes"
@@ -16,9 +16,9 @@ import (
 
 	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/internal/requestutils"
-	"github.com/hiimjako/syncinator/pkg/diff"
-	"github.com/hiimjako/syncinator/pkg/filestorage"
-	"github.com/hiimjako/syncinator/pkg/middleware"
+	"github.com/hiimjako/syncinator/syncinator/diff"
+	"github.com/hiimjako/syncinator/syncinator/filestorage"
+	"github.com/hiimjako/syncinator/syncinator/middleware"
 )
 
 const (

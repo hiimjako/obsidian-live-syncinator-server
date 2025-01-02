@@ -13,8 +13,8 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/gdamore/tcell/v2"
 	"github.com/hiimjako/syncinator/internal/screen"
-	rtsync "github.com/hiimjako/syncinator/pkg"
-	"github.com/hiimjako/syncinator/pkg/diff"
+	rtsync "github.com/hiimjako/syncinator/syncinator"
+	"github.com/hiimjako/syncinator/syncinator/diff"
 )
 
 var (
