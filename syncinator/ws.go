@@ -91,26 +91,82 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	file := s.files[data.FileID]
-	localCopy := file.Content
-	for _, d := range data.Chunks {
-		localCopy = diff.Apply(localCopy, d)
+	if len(data.Chunks) == 0 {
+		return
 	}
-	diffs := diff.Compute(file.Content, localCopy)
 
-	data.Version += 1
+	file := s.files[data.FileID]
+
+	chunkToApply := data.Chunks
+
+	// the incoming data was applied on older version
+	// need to transform it
+	if data.Version < file.Version {
+		dbOperations, err := s.db.FetchFileOperationsFromVersion(s.ctx, repository.FetchFileOperationsFromVersionParams{
+			FileID:      file.ID,
+			Version:     data.Version,
+			WorkspaceID: file.WorkspaceID,
+		})
+		if err != nil {
+			log.Println("error while fetching operations, skipping message", data.FileID, data.Version, err)
+			return
+		}
+
+		currVersion := data.Version
+		for i := 0; i < len(dbOperations); i++ {
+			if currVersion+1 != dbOperations[i].Version {
+				log.Println("missing an operation in history to transform, skipping message", data.FileID, data.Version)
+				return
+			}
+
+			var previousChunk []diff.Chunk
+			err := json.Unmarshal([]byte(dbOperations[i].Operation), &previousChunk)
+			if err != nil {
+				log.Println("error while parsing operations, skipping message", data.FileID, data.Version, err)
+				return
+			}
+
+			chunkToApply = diff.TransformMultiple(previousChunk, chunkToApply)
+			currVersion = dbOperations[i].Version
+		}
+	}
+
+	file.Content = diff.ApplyMultiple(file.Content, chunkToApply)
 	file.Version += 1
-	file.Content = localCopy
 	s.files[data.FileID] = file
 
-	if len(diffs) > 0 {
-		s.storageQueue <- data
-		s.broadcastMessage(sender, ChunkMessage{
-			WsMessageHeader: data.WsMessageHeader,
-			Chunks:          diffs,
-			Version:         file.Version,
-		})
+	msgToBroadcast := ChunkMessage{
+		WsMessageHeader: data.WsMessageHeader,
+		Chunks:          chunkToApply,
+		Version:         file.Version,
 	}
+
+	operation, err := json.Marshal(msgToBroadcast.Chunks)
+	if err != nil {
+		log.Println("error while marshaling operation", data.FileID, data.Version, err)
+		return
+	}
+	err = s.db.CreateOperation(s.ctx, repository.CreateOperationParams{
+		FileID:    file.ID,
+		Version:   file.Version,
+		Operation: string(operation),
+	})
+	if err != nil {
+		log.Println("error while storing operation", data.FileID, data.Version, err)
+		return
+	}
+
+	err = s.db.UpdateFileVersion(s.ctx, repository.UpdateFileVersionParams{
+		ID:      file.ID,
+		Version: file.Version,
+	})
+	if err != nil {
+		log.Println("error while updating version", data.FileID, data.Version, err)
+		return
+	}
+
+	s.storageQueue <- msgToBroadcast
+	s.broadcastMessage(sender, msgToBroadcast)
 }
 
 func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
@@ -193,27 +249,6 @@ func (s *syncinator) applyChunkToFile(chunkMsg ChunkMessage) error {
 		if err != nil {
 			log.Println(err)
 		}
-	}
-
-	operation, err := json.Marshal(chunkMsg.Chunks)
-	if err != nil {
-		return err
-	}
-	err = s.db.CreateOperation(s.ctx, repository.CreateOperationParams{
-		FileID:    file.ID,
-		Version:   chunkMsg.Version,
-		Operation: string(operation),
-	})
-	if err != nil {
-		return err
-	}
-
-	err = s.db.UpdateFileVersion(s.ctx, repository.UpdateFileVersionParams{
-		ID:      chunkMsg.FileID,
-		Version: chunkMsg.Version,
-	})
-	if err != nil {
-		return err
 	}
 
 	return nil
