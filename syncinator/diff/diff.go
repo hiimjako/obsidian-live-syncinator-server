@@ -52,33 +52,102 @@ func Compute(oldText, newText string) []Chunk {
 	return diffChunks
 }
 
-func Apply(text string, diff Chunk) string {
+func ApplyMultiple(text string, chunks []Chunk) string {
+	output := text
+	for i := 0; i < len(chunks); i++ {
+		output = Apply(output, chunks[i])
+	}
+
+	return output
+}
+
+func Apply(text string, chunk Chunk) string {
 	textLen := int64(len(text))
 
-	switch diff.Type {
+	switch chunk.Type {
 	case Add:
-		if diff.Position > textLen {
-			return text + diff.Text
+		if chunk.Position > textLen {
+			return text + chunk.Text
 		}
 
-		if diff.Position == 0 {
-			return diff.Text + text
+		if chunk.Position == 0 {
+			return chunk.Text + text
 		}
 
-		return text[:diff.Position] + diff.Text + text[diff.Position:]
+		return text[:chunk.Position] + chunk.Text + text[chunk.Position:]
 
 	case Remove:
-		if text == "" || diff.Position >= textLen {
+		if text == "" || chunk.Position >= textLen {
 			return text
 		}
 
-		endPosition := diff.Position + diff.Len
+		endPosition := chunk.Position + chunk.Len
 		if endPosition > textLen {
 			endPosition = textLen
 		}
 
-		return text[:diff.Position] + text[endPosition:]
+		return text[:chunk.Position] + text[endPosition:]
 	}
 
 	panic("not reachable")
+}
+
+func Transform(lastOp, opToTransform Chunk) Chunk {
+	transformed := opToTransform
+
+	switch lastOp.Type {
+	case Add:
+		switch opToTransform.Type {
+		case Add:
+			if lastOp.Position <= opToTransform.Position {
+				transformed.Position += lastOp.Len
+			}
+		case Remove:
+			if lastOp.Position <= opToTransform.Position {
+				transformed.Position += lastOp.Len
+			}
+		}
+	case Remove:
+		switch opToTransform.Type {
+		case Add:
+			if lastOp.Position < opToTransform.Position {
+				transformed.Position -= min(lastOp.Len, opToTransform.Position-lastOp.Position)
+			}
+		case Remove:
+			if lastOp.Position < opToTransform.Position+opToTransform.Len &&
+				lastOp.Position+lastOp.Len > opToTransform.Position {
+				startOverlap := max(lastOp.Position, opToTransform.Position)
+				endOverlap := min(lastOp.Position+lastOp.Len, opToTransform.Position+opToTransform.Len)
+
+				overlapStartInopToTransform := startOverlap - opToTransform.Position
+				overlapEndInopToTransform := endOverlap - opToTransform.Position
+				opToTransformText := opToTransform.Text[:overlapStartInopToTransform] +
+					opToTransform.Text[overlapEndInopToTransform:]
+
+				transformed.Position = min(opToTransform.Position, lastOp.Position)
+				transformed.Len -= endOverlap - startOverlap
+				transformed.Text = opToTransformText
+			} else if lastOp.Position <= opToTransform.Position {
+				transformed.Position -= lastOp.Len
+			}
+		}
+	}
+
+	return transformed
+}
+
+func TransformMultiple(lastOpList, opToTransformList []Chunk) []Chunk {
+	transformedOps := make([]Chunk, len(opToTransformList))
+
+	for i, op2 := range opToTransformList {
+		transformedOp := op2
+
+		for _, op1 := range lastOpList {
+			transformedOp = Transform(op1, transformedOp)
+		}
+
+		transformedOps[i] = transformedOp
+	}
+
+	return transformedOps
 }
