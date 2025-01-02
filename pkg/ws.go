@@ -72,7 +72,7 @@ func (s *syncinator) subscribe(w http.ResponseWriter, r *http.Request) error {
 	s.addSubscriber(sub)
 	defer s.deleteSubscriber(sub)
 
-	log.Printf("client %s disconnected", sub.clientID)
+	log.Printf("client %s connected", sub.clientID)
 
 	sub.Listen()
 

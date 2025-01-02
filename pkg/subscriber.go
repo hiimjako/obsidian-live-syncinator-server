@@ -132,12 +132,12 @@ func (s *subscriber) Listen() {
 			case chunkMsg := <-s.chunkMsgQueue:
 				err := s.WriteMessage(chunkMsg, time.Second*1)
 				if err != nil {
-					log.Println("error writing message to client", err)
+					log.Printf("error sending chunk message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
 				}
 			case eventMsg := <-s.eventMsgQueue:
 				err := s.WriteMessage(eventMsg, time.Second*1)
 				if err != nil {
-					log.Println("error writing message to client", err)
+					log.Printf("error sending event message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
 				}
 			case <-s.ctx.Done():
 				s.Close()
