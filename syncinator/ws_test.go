@@ -146,10 +146,15 @@ func Test_handleChunk(t *testing.T) {
 		// check that only ws on same workspace recive the event
 
 		go func() {
-			// the sender should not recive any message
+			// the sender should recive the message message
 			var recMsg ChunkMessage
 			err := wsjson.Read(ctx, senderWorkspace1, &recMsg)
-			assert.Error(t, err)
+			assert.NoError(t, err)
+
+			// only version should differ
+			assert.Equal(t, msg.Version+1, recMsg.Version)
+			recMsg.Version = msg.Version
+			assert.Equal(t, msg, recMsg)
 
 			wg.Done()
 		}()
@@ -294,9 +299,28 @@ func Test_handleChunk(t *testing.T) {
 		wg.Add(2)
 
 		go func() {
-			// the client1 should recive the transformed chunk of client2
+			// the client1 should recive the first message
 			var recMsg ChunkMessage
 			err := wsjson.Read(ctx, client1, &recMsg)
+			assert.NoError(t, err)
+			assert.Equal(t, ChunkMessage{
+				WsMessageHeader: WsMessageHeader{
+					Type:   ChunkEventType,
+					FileID: file.ID,
+				},
+				Version: 1,
+				Chunks: []diff.Chunk{
+					{
+						Position: 0,
+						Type:     diff.Add,
+						Text:     "Hello!",
+						Len:      6,
+					},
+				},
+			}, recMsg)
+
+			// the client1 should recive the transformed chunk of client2
+			err = wsjson.Read(ctx, client1, &recMsg)
 			assert.NoError(t, err)
 			assert.Equal(t, ChunkMessage{
 				WsMessageHeader: WsMessageHeader{
@@ -340,6 +364,25 @@ func Test_handleChunk(t *testing.T) {
 			}, recMsg)
 
 			client2Content = diff.ApplyMultiple(client2Content, recMsg.Chunks)
+
+			// and the transformed one
+			err = wsjson.Read(ctx, client2, &recMsg)
+			assert.NoError(t, err)
+			assert.Equal(t, ChunkMessage{
+				WsMessageHeader: WsMessageHeader{
+					Type:   ChunkEventType,
+					FileID: file.ID,
+				},
+				Version: 2,
+				Chunks: []diff.Chunk{
+					{
+						Position: 6,
+						Type:     diff.Remove,
+						Text:     startingString,
+						Len:      int64(len(startingString)),
+					},
+				},
+			}, recMsg)
 			wg.Done()
 		}()
 

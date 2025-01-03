@@ -207,9 +207,8 @@ func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
 
 		isSameWorkspace := sub.workspaceID == sender.workspaceID
 		isSameClient := sub.clientID == sender.clientID
-		shouldSend := isSameWorkspace && !isSameClient
 
-		if !shouldSend {
+		if !isSameWorkspace {
 			continue
 		}
 
@@ -221,6 +220,10 @@ func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
 				go sub.closeSlow()
 			}
 		case EventMessage:
+			if isSameClient {
+				continue
+			}
+
 			select {
 			case sub.eventMsgQueue <- m:
 			default:
