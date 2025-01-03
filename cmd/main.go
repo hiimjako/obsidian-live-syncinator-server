@@ -14,7 +14,7 @@ import (
 	"github.com/hiimjako/syncinator/internal/env"
 	"github.com/hiimjako/syncinator/internal/migration"
 	"github.com/hiimjako/syncinator/internal/repository"
-	rtsync "github.com/hiimjako/syncinator/syncinator"
+	"github.com/hiimjako/syncinator/syncinator"
 	"github.com/hiimjako/syncinator/syncinator/filestorage"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -53,7 +53,7 @@ func run(ev *env.EnvVariables) error {
 	db := repository.New(dbSqlite)
 	disk := filestorage.NewDisk(ev.StorageDir)
 
-	handler := rtsync.New(db, disk, rtsync.Options{
+	handler := syncinator.New(db, disk, syncinator.Options{
 		JWTSecret: ev.JWTSecret,
 	})
 	defer handler.Close()

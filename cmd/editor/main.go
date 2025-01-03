@@ -13,7 +13,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/gdamore/tcell/v2"
 	"github.com/hiimjako/syncinator/internal/screen"
-	rtsync "github.com/hiimjako/syncinator/syncinator"
+	"github.com/hiimjako/syncinator/syncinator"
 	"github.com/hiimjako/syncinator/syncinator/diff"
 )
 
@@ -57,7 +57,7 @@ func pollText(s *screen.Screen) {
 	var mu sync.Mutex
 
 	ctx := context.Background()
-	url := "ws://" + *serverURL + rtsync.PathWebSocket
+	url := "ws://" + *serverURL + syncinator.PathWebSocket
 	ws, _, err := websocket.Dial(ctx, url, nil)
 	logOnError(err)
 
@@ -65,7 +65,7 @@ func pollText(s *screen.Screen) {
 	go func() {
 		// listen for changes in ws
 		for {
-			var msg rtsync.ChunkMessage
+			var msg syncinator.ChunkMessage
 			err = wsjson.Read(ctx, ws, &msg)
 			logOnError(err)
 
@@ -94,8 +94,8 @@ func pollText(s *screen.Screen) {
 				continue
 			}
 
-			err = wsjson.Write(ctx, ws, rtsync.ChunkMessage{
-				WsMessageHeader: rtsync.WsMessageHeader{
+			err = wsjson.Write(ctx, ws, syncinator.ChunkMessage{
+				WsMessageHeader: syncinator.WsMessageHeader{
 					FileID: int64(*fileId),
 				},
 				Chunks: d,
