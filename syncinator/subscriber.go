@@ -93,7 +93,7 @@ func (s *subscriber) Listen() {
 
 			msg, err := s.WaitMessage()
 			if err != nil {
-				log.Println(err)
+				s.checkWsError(err)
 				continue
 			}
 
@@ -169,7 +169,6 @@ func (s *subscriber) WaitMessage() (map[string]any, error) {
 
 	err := wsjson.Read(s.ctx, s.conn, &msg)
 	if err != nil {
-		s.checkWsError(err)
 		return msg, err
 	}
 
@@ -199,5 +198,10 @@ func (s *subscriber) checkWsError(err error) {
 	if websocket.CloseStatus(err) != -1 || strings.Contains(err.Error(), "EOF") {
 		log.Printf("client %s (%d) fatal error, closing connection\n", s.clientID, s.workspaceID)
 		s.Close()
+		return
+	}
+
+	if err != nil {
+		log.Println(err)
 	}
 }
