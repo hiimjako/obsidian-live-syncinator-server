@@ -37,9 +37,8 @@ func Test_wsAuth(t *testing.T) {
 	db := testutils.CreateDB(t)
 
 	mockFileStorage := new(filestorage.MockFileStorage)
-	repo := repository.New(db)
 	authOptions := Options{JWTSecret: []byte("secret")}
-	handler := New(repo, mockFileStorage, authOptions)
+	handler := New(db, mockFileStorage, authOptions)
 	ts := httptest.NewServer(handler)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -99,7 +98,7 @@ func Test_handleChunk(t *testing.T) {
 		assert.NoError(t, err)
 
 		authOptions := Options{JWTSecret: []byte("secret")}
-		handler := New(repo, fs, authOptions)
+		handler := New(db, fs, authOptions)
 		ts := httptest.NewServer(handler)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -243,7 +242,7 @@ func Test_handleChunk(t *testing.T) {
 		assert.NoError(t, err)
 
 		authOptions := Options{JWTSecret: []byte("secret")}
-		handler := New(repo, fs, authOptions)
+		handler := New(db, fs, authOptions)
 		ts := httptest.NewServer(handler)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -457,9 +456,8 @@ func Test_handleEvent(t *testing.T) {
 	db := testutils.CreateDB(t)
 
 	mockFileStorage := new(filestorage.MockFileStorage)
-	repo := repository.New(db)
 	authOptions := Options{JWTSecret: []byte("secret")}
-	handler := New(repo, mockFileStorage, authOptions)
+	handler := New(db, mockFileStorage, authOptions)
 	ts := httptest.NewServer(handler)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)

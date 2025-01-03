@@ -92,6 +92,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	defer s.mut.Unlock()
 
 	if len(data.Chunks) == 0 {
+		log.Printf("0 chunks, skipping message. fileId: %v, version: %v\n", data.FileID, data.Version)
 		return
 	}
 

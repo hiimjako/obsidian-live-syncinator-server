@@ -2,6 +2,7 @@ package syncinator
 
 import (
 	"context"
+	"database/sql"
 	"io"
 	"log"
 	"net/http"
@@ -59,10 +60,12 @@ type syncinator struct {
 	storageQueue   chan ChunkMessage
 	storage        filestorage.Storage
 	db             *repository.Queries
+	conn           *sql.DB
 }
 
-func New(db *repository.Queries, fs filestorage.Storage, opts Options) *syncinator {
+func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 	opts.Default()
+	repo := repository.New(db)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &syncinator{
@@ -79,7 +82,8 @@ func New(db *repository.Queries, fs filestorage.Storage, opts Options) *syncinat
 		files:          make(map[int64]CachedFile),
 		storageQueue:   make(chan ChunkMessage, 128),
 		storage:        fs,
-		db:             db,
+		conn:           db,
+		db:             repo,
 	}
 
 	s.init()

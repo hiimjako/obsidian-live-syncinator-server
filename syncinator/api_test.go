@@ -24,9 +24,8 @@ import (
 func Test_listFilesHandler(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
 	db := testutils.CreateDB(t)
-	repo := repository.New(db)
 	options := Options{JWTSecret: []byte("secret")}
-	server := New(repo, mockFileStorage, options)
+	server := New(db, mockFileStorage, options)
 
 	t.Cleanup(func() { server.Close() })
 
@@ -89,9 +88,8 @@ func Test_listFilesHandler(t *testing.T) {
 func Test_fetchFileHandler(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
 	db := testutils.CreateDB(t)
-	repo := repository.New(db)
 	options := Options{JWTSecret: []byte("secret")}
-	server := New(repo, mockFileStorage, options)
+	server := New(db, mockFileStorage, options)
 
 	t.Cleanup(func() { server.Close() })
 
@@ -176,9 +174,8 @@ func Test_createFileHandler(t *testing.T) {
 	t.Run("should create a text file", func(t *testing.T) {
 		mockFileStorage := new(filestorage.MockFileStorage)
 		db := testutils.CreateDB(t)
-		repo := repository.New(db)
 		options := Options{JWTSecret: []byte("secret")}
-		server := New(repo, mockFileStorage, options)
+		server := New(db, mockFileStorage, options)
 
 		t.Cleanup(func() { server.Close() })
 
@@ -216,7 +213,7 @@ func Test_createFileHandler(t *testing.T) {
 		}, body)
 
 		// check db
-		files, err := repo.FetchWorkspaceFiles(context.Background(), workspaceID)
+		files, err := server.db.FetchWorkspaceFiles(context.Background(), workspaceID)
 		assert.NoError(t, err)
 		assert.Len(t, files, 1)
 		assert.Equal(t, repository.File{
@@ -237,9 +234,8 @@ func Test_createFileHandler(t *testing.T) {
 	t.Run("should create a non-text file", func(t *testing.T) {
 		mockFileStorage := new(filestorage.MockFileStorage)
 		db := testutils.CreateDB(t)
-		repo := repository.New(db)
 		options := Options{JWTSecret: []byte("secret")}
-		server := New(repo, mockFileStorage, options)
+		server := New(db, mockFileStorage, options)
 
 		t.Cleanup(func() { server.Close() })
 
@@ -282,7 +278,7 @@ func Test_createFileHandler(t *testing.T) {
 		}, body)
 
 		// check db
-		file, err := repo.FetchFile(context.Background(), 1)
+		file, err := server.db.FetchFile(context.Background(), 1)
 		assert.NoError(t, err)
 		assert.Equal(t, repository.File{
 			ID:            1,
@@ -302,9 +298,8 @@ func Test_createFileHandler(t *testing.T) {
 	t.Run("should not insert duplicate paths", func(t *testing.T) {
 		mockFileStorage := new(filestorage.MockFileStorage)
 		db := testutils.CreateDB(t)
-		repo := repository.New(db)
 		options := Options{JWTSecret: []byte("secret")}
-		server := New(repo, mockFileStorage, options)
+		server := New(db, mockFileStorage, options)
 
 		t.Cleanup(func() { server.Close() })
 
@@ -347,7 +342,7 @@ func Test_createFileHandler(t *testing.T) {
 		assert.Equal(t, ErrDuplicateFile, body)
 
 		// check db
-		files, err := repo.FetchWorkspaceFiles(context.Background(), workspaceID)
+		files, err := server.db.FetchWorkspaceFiles(context.Background(), workspaceID)
 		assert.NoError(t, err)
 		assert.Len(t, files, 1)
 
@@ -358,9 +353,8 @@ func Test_createFileHandler(t *testing.T) {
 	t.Run("should insert same path on different workspaces", func(t *testing.T) {
 		mockFileStorage := new(filestorage.MockFileStorage)
 		db := testutils.CreateDB(t)
-		repo := repository.New(db)
 		options := Options{JWTSecret: []byte("secret")}
-		server := New(repo, mockFileStorage, options)
+		server := New(db, mockFileStorage, options)
 
 		t.Cleanup(func() { server.Close() })
 
@@ -408,12 +402,12 @@ func Test_createFileHandler(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, res.Code)
 
 		// check db
-		files, err := repo.FetchWorkspaceFiles(context.Background(), workspaceID1)
+		files, err := server.db.FetchWorkspaceFiles(context.Background(), workspaceID1)
 		assert.NoError(t, err)
 		assert.Len(t, files, 1)
 		assert.Equal(t, diskPath1, files[0].DiskPath)
 
-		files, err = repo.FetchWorkspaceFiles(context.Background(), workspaceID2)
+		files, err = server.db.FetchWorkspaceFiles(context.Background(), workspaceID2)
 		assert.NoError(t, err)
 		assert.Len(t, files, 1)
 		assert.Equal(t, diskPath2, files[0].DiskPath)
@@ -427,9 +421,8 @@ func Test_createFileHandler(t *testing.T) {
 func Test_deleteFileHandler(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
 	db := testutils.CreateDB(t)
-	repo := repository.New(db)
 	options := Options{JWTSecret: []byte("secret")}
-	server := New(repo, mockFileStorage, options)
+	server := New(db, mockFileStorage, options)
 
 	t.Cleanup(func() { server.Close() })
 
@@ -470,7 +463,7 @@ func Test_deleteFileHandler(t *testing.T) {
 		assert.Equal(t, "", deleteBody)
 
 		// check db
-		files, err := repo.FetchWorkspaceFiles(context.Background(), workspaceID)
+		files, err := server.db.FetchWorkspaceFiles(context.Background(), workspaceID)
 		assert.NoError(t, err)
 		assert.Len(t, files, 0)
 
@@ -516,7 +509,7 @@ func Test_deleteFileHandler(t *testing.T) {
 		assert.Equal(t, ErrNotExistingFile, deleteBody)
 
 		// check db
-		files, err := repo.FetchWorkspaceFiles(context.Background(), workspaceID)
+		files, err := server.db.FetchWorkspaceFiles(context.Background(), workspaceID)
 		assert.NoError(t, err)
 		assert.Len(t, files, 1)
 
@@ -529,9 +522,8 @@ func Test_deleteFileHandler(t *testing.T) {
 func Test_updateFileHandler(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
 	db := testutils.CreateDB(t)
-	repo := repository.New(db)
 	options := Options{JWTSecret: []byte("secret")}
-	server := New(repo, mockFileStorage, options)
+	server := New(db, mockFileStorage, options)
 
 	t.Cleanup(func() { server.Close() })
 
@@ -574,7 +566,7 @@ func Test_updateFileHandler(t *testing.T) {
 		assert.Equal(t, "", updateBody)
 
 		// check db
-		files, err := repo.FetchWorkspaceFiles(context.Background(), workspaceID)
+		files, err := server.db.FetchWorkspaceFiles(context.Background(), workspaceID)
 		assert.NoError(t, err)
 		assert.Len(t, files, 1)
 		assert.Equal(t, repository.File{
@@ -632,7 +624,7 @@ func Test_updateFileHandler(t *testing.T) {
 		assert.Equal(t, ErrNotExistingFile, deleteBody)
 
 		// check db
-		file, err := repo.FetchFile(context.Background(), createBody.ID)
+		file, err := server.db.FetchFile(context.Background(), createBody.ID)
 		assert.NoError(t, err)
 		assert.Equal(t, filepath, file.WorkspacePath)
 	})
@@ -641,9 +633,8 @@ func Test_updateFileHandler(t *testing.T) {
 func Test_listOperationsHandler(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
 	db := testutils.CreateDB(t)
-	repo := repository.New(db)
 	options := Options{JWTSecret: []byte("secret")}
-	server := New(repo, mockFileStorage, options)
+	server := New(db, mockFileStorage, options)
 
 	t.Cleanup(func() { server.Close() })
 
@@ -711,7 +702,7 @@ func Test_listOperationsHandler(t *testing.T) {
 	}
 
 	for _, o := range operationsToInsert {
-		err := repo.CreateOperation(context.Background(), repository.CreateOperationParams{
+		err := server.db.CreateOperation(context.Background(), repository.CreateOperationParams{
 			FileID:    o.fileID,
 			Version:   o.Version,
 			Operation: o.Operation,

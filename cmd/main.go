@@ -13,7 +13,6 @@ import (
 
 	"github.com/hiimjako/syncinator/internal/env"
 	"github.com/hiimjako/syncinator/internal/migration"
-	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/syncinator"
 	"github.com/hiimjako/syncinator/syncinator/filestorage"
 
@@ -50,10 +49,9 @@ func run(ev *env.EnvVariables) error {
 	}
 	log.Printf("listening on http://%v", l.Addr())
 
-	db := repository.New(dbSqlite)
 	disk := filestorage.NewDisk(ev.StorageDir)
 
-	handler := syncinator.New(db, disk, syncinator.Options{
+	handler := syncinator.New(dbSqlite, disk, syncinator.Options{
 		JWTSecret: ev.JWTSecret,
 	})
 	defer handler.Close()

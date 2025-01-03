@@ -45,7 +45,7 @@ func TestNew(t *testing.T) {
 	var server *syncinator
 	require.NotPanics(t, func() {
 		options := Options{JWTSecret: []byte("secret")}
-		server = New(repo, mockFileStorage, options)
+		server = New(db, mockFileStorage, options)
 	})
 	t.Cleanup(func() { server.Close() })
 

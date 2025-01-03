@@ -23,14 +23,13 @@ func Test_fetchWorkspaceHandler(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, migration.Migrate(db))
 
-	repo := repository.New(db)
 	mockFileStorage := new(filestorage.MockFileStorage)
-	server := New(repo, mockFileStorage, Options{JWTSecret: []byte("secret")})
+	server := New(db, mockFileStorage, Options{JWTSecret: []byte("secret")})
 
 	hash, err := bcrypt.GenerateFromPassword([]byte("strong_password"), bcrypt.DefaultCost)
 	require.NoError(t, err)
 
-	require.NoError(t, repo.AddWorkspace(context.Background(), repository.AddWorkspaceParams{
+	require.NoError(t, server.db.AddWorkspace(context.Background(), repository.AddWorkspaceParams{
 		Name:     "workspace1",
 		Password: string(hash),
 	}))
