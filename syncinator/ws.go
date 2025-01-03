@@ -108,21 +108,36 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 			WorkspaceID: file.WorkspaceID,
 		})
 		if err != nil {
-			log.Println("error while fetching operations, skipping message", data.FileID, data.Version, err)
+			log.Printf(
+				"error while fetching operations, skipping message. fileId: %v, version: %v, err: %v\n",
+				data.FileID,
+				data.Version,
+				err,
+			)
 			return
 		}
 
 		currVersion := data.Version
 		for i := 0; i < len(dbOperations); i++ {
 			if currVersion+1 != dbOperations[i].Version {
-				log.Println("missing an operation in history to transform, skipping message", data.FileID, data.Version)
+				log.Printf(
+					"missing operation in history to transform, skipping message. fileId: %v, version: %v, err: %v\n",
+					data.FileID,
+					data.Version,
+					err,
+				)
 				return
 			}
 
 			var previousChunk []diff.Chunk
 			err := json.Unmarshal([]byte(dbOperations[i].Operation), &previousChunk)
 			if err != nil {
-				log.Println("error while parsing operations, skipping message", data.FileID, data.Version, err)
+				log.Printf(
+					"error while parsing operations, skipping message. fileId: %v, version: %v, err: %v\n",
+					data.FileID,
+					data.Version,
+					err,
+				)
 				return
 			}
 
@@ -143,7 +158,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 
 	operation, err := json.Marshal(msgToBroadcast.Chunks)
 	if err != nil {
-		log.Println("error while marshaling operation", data.FileID, data.Version, err)
+		log.Printf("error while marshaling operation. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
 		return
 	}
 	err = s.db.CreateOperation(s.ctx, repository.CreateOperationParams{
@@ -152,7 +167,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		Operation: string(operation),
 	})
 	if err != nil {
-		log.Println("error while storing operation", data.FileID, data.Version, err)
+		log.Printf("error while storing operation. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
 		return
 	}
 
@@ -161,7 +176,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		Version: file.Version,
 	})
 	if err != nil {
-		log.Println("error while updating version", data.FileID, data.Version, err)
+		log.Printf("error while updating version. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
 		return
 	}
 
