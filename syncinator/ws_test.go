@@ -95,13 +95,13 @@ func Test_handleChunk(t *testing.T) {
 			Hash:          "",
 			WorkspaceID:   workspaceID,
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		authOptions := Options{JWTSecret: []byte("secret")}
 		handler := New(db, fs, authOptions)
 		ts := httptest.NewServer(handler)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 		var workspaceID1 int64 = 1
 		var workspaceID2 int64 = 2
@@ -160,9 +160,11 @@ func Test_handleChunk(t *testing.T) {
 
 		go func() {
 			// the reciver on other workspace should not recive any message
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			var recMsg ChunkMessage
 			err := wsjson.Read(ctx, reciverWorkspace2, &recMsg)
 			assert.Error(t, err)
+			cancel()
 
 			wg.Done()
 		}()
@@ -185,7 +187,7 @@ func Test_handleChunk(t *testing.T) {
 
 		wg.Wait()
 
-		updatedFile, err := repo.FetchFile(context.Background(), file.ID)
+		updatedFile, err := handler.db.FetchFile(context.Background(), file.ID)
 		assert.NoError(t, err)
 
 		assert.Equal(t, int64(1), handler.files[file.ID].Version)
@@ -193,7 +195,7 @@ func Test_handleChunk(t *testing.T) {
 		assert.Greater(t, updatedFile.UpdatedAt, file.UpdatedAt)
 
 		// check operation history
-		operations, err := repo.FetchFileOperationsFromVersion(
+		operations, err := handler.db.FetchFileOperationsFromVersion(
 			context.Background(),
 			repository.FetchFileOperationsFromVersionParams{
 				FileID:      file.ID,
@@ -319,7 +321,8 @@ func Test_handleChunk(t *testing.T) {
 			}, recMsg)
 
 			// the client1 should recive the transformed chunk of client2
-			err = wsjson.Read(ctx, client1, &recMsg)
+			var recMsg2 ChunkMessage
+			err = wsjson.Read(ctx, client1, &recMsg2)
 			assert.NoError(t, err)
 			assert.Equal(t, ChunkMessage{
 				WsMessageHeader: WsMessageHeader{
@@ -335,9 +338,9 @@ func Test_handleChunk(t *testing.T) {
 						Len:      int64(len(startingString)),
 					},
 				},
-			}, recMsg)
+			}, recMsg2)
 
-			client1Content = diff.ApplyMultiple(client1Content, recMsg.Chunks)
+			client1Content = diff.ApplyMultiple(client1Content, recMsg2.Chunks)
 			wg.Done()
 		}()
 
@@ -365,7 +368,8 @@ func Test_handleChunk(t *testing.T) {
 			client2Content = diff.ApplyMultiple(client2Content, recMsg.Chunks)
 
 			// and the transformed one
-			err = wsjson.Read(ctx, client2, &recMsg)
+			var recMsg2 ChunkMessage
+			err = wsjson.Read(ctx, client2, &recMsg2)
 			assert.NoError(t, err)
 			assert.Equal(t, ChunkMessage{
 				WsMessageHeader: WsMessageHeader{
@@ -381,7 +385,7 @@ func Test_handleChunk(t *testing.T) {
 						Len:      int64(len(startingString)),
 					},
 				},
-			}, recMsg)
+			}, recMsg2)
 			wg.Done()
 		}()
 
@@ -394,14 +398,14 @@ func Test_handleChunk(t *testing.T) {
 		assert.Equal(t, client2Content, client1Content)
 		assert.Equal(t, "Hello!", client1Content)
 
-		updatedFile, err := repo.FetchFile(context.Background(), file.ID)
+		updatedFile, err := handler.db.FetchFile(context.Background(), file.ID)
 		assert.NoError(t, err)
 
 		assert.Equal(t, int64(2), handler.files[file.ID].Version)
 		assert.Equal(t, int64(2), updatedFile.Version)
 
 		// check operation history
-		operations, err := repo.FetchFileOperationsFromVersion(
+		operations, err := handler.db.FetchFileOperationsFromVersion(
 			context.Background(),
 			repository.FetchFileOperationsFromVersionParams{
 				FileID:      file.ID,

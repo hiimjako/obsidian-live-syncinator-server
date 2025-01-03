@@ -155,30 +155,6 @@ func (s *subscriber) Listen() {
 	<-s.ctx.Done()
 }
 
-func (s *subscriber) ParseChunkMessage() (ChunkMessage, error) {
-	var data ChunkMessage
-
-	err := wsjson.Read(s.ctx, s.conn, &data)
-	if err != nil {
-		s.checkWsError(err)
-		return data, err
-	}
-
-	return data, err
-}
-
-func (s *subscriber) ParseEventMessage() (EventMessage, error) {
-	var data EventMessage
-
-	err := wsjson.Read(s.ctx, s.conn, &data)
-	if err != nil {
-		s.checkWsError(err)
-		return data, err
-	}
-
-	return data, err
-}
-
 func (s *subscriber) MessageType(data map[string]any) (int, error) {
 	msgType, ok := data["type"].(float64)
 	if !ok {

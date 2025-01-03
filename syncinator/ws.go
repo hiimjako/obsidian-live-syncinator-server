@@ -149,7 +149,6 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 
 	file.Content = diff.ApplyMultiple(file.Content, chunkToApply)
 	file.Version += 1
-	s.files[data.FileID] = file
 
 	msgToBroadcast := ChunkMessage{
 		WsMessageHeader: data.WsMessageHeader,
@@ -157,12 +156,29 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		Version:         file.Version,
 	}
 
+	committed := false
+	tx, err := s.conn.Begin()
+	if err != nil {
+		log.Printf("error opening transaction. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
+		return
+	}
+
+	txq := s.db.WithTx(tx)
+	//nolint
+	defer func() {
+		if committed {
+			s.files[data.FileID] = file
+		} else {
+			tx.Rollback()
+		}
+	}()
+
 	operation, err := json.Marshal(msgToBroadcast.Chunks)
 	if err != nil {
 		log.Printf("error while marshaling operation. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
 		return
 	}
-	err = s.db.CreateOperation(s.ctx, repository.CreateOperationParams{
+	err = txq.CreateOperation(s.ctx, repository.CreateOperationParams{
 		FileID:    file.ID,
 		Version:   file.Version,
 		Operation: string(operation),
@@ -172,7 +188,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		return
 	}
 
-	err = s.db.UpdateFileVersion(s.ctx, repository.UpdateFileVersionParams{
+	err = txq.UpdateFileVersion(s.ctx, repository.UpdateFileVersionParams{
 		ID:      file.ID,
 		Version: file.Version,
 	})
@@ -183,6 +199,10 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 
 	s.storageQueue <- msgToBroadcast
 	s.broadcastMessage(sender, msgToBroadcast)
+
+	if err := tx.Commit(); err == nil {
+		committed = true
+	}
 }
 
 func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
