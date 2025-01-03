@@ -76,7 +76,7 @@ func (s *syncinator) subscribe(w http.ResponseWriter, r *http.Request) error {
 	s.addSubscriber(sub)
 	defer s.deleteSubscriber(sub)
 
-	log.Printf("client %s connected", sub.clientID)
+	log.Printf("client %s (%d) connected\n", sub.clientID, sub.workspaceID)
 
 	sub.Listen()
 
@@ -199,6 +199,12 @@ func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
 	}
 
 	for sub := range s.subscribers {
+		// delete dead connections
+		if !sub.IsConnected() {
+			delete(s.subscribers, sub)
+			continue
+		}
+
 		isSameWorkspace := sub.workspaceID == sender.workspaceID
 		isSameClient := sub.clientID == sender.clientID
 		shouldSend := isSameWorkspace && !isSameClient

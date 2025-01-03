@@ -73,7 +73,7 @@ func NewSubscriber(
 	return s, nil
 }
 
-func (s *subscriber) IsOpen() bool {
+func (s *subscriber) IsConnected() bool {
 	return s.isConnected.Load()
 }
 
@@ -87,7 +87,7 @@ func (s *subscriber) Listen() {
 	// on ws message
 	go func() {
 		for {
-			if !s.IsOpen() {
+			if !s.IsConnected() {
 				return
 			}
 
@@ -221,6 +221,7 @@ func mapToStruct(data map[string]any, result interface{}) error {
 
 func (s *subscriber) checkWsError(err error) {
 	if websocket.CloseStatus(err) != -1 || strings.Contains(err.Error(), "EOF") {
+		log.Printf("client %s (%d) fatal error, closing connection\n", s.clientID, s.workspaceID)
 		s.Close()
 	}
 }
