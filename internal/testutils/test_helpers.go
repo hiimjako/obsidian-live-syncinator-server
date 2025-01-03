@@ -23,7 +23,8 @@ import (
 )
 
 func CreateDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("sqlite3", ":memory:")
+	// https://stackoverflow.com/a/77150429
+	db, err := sql.Open("sqlite3", "file:memdb1?mode=memory&cache=shared")
 	require.NoError(t, err)
 	require.NoError(t, migration.Migrate(db))
 
