@@ -264,6 +264,23 @@ func (q *Queries) FetchWorkspaceFiles(ctx context.Context, workspaceID int64) ([
 	return items, nil
 }
 
+const updateFileHash = `-- name: UpdateFileHash :exec
+UPDATE files
+SET 
+    hash = ?
+WHERE id = ?
+`
+
+type UpdateFileHashParams struct {
+	Hash string `json:"hash"`
+	ID   int64  `json:"id"`
+}
+
+func (q *Queries) UpdateFileHash(ctx context.Context, arg UpdateFileHashParams) error {
+	_, err := q.db.ExecContext(ctx, updateFileHash, arg.Hash, arg.ID)
+	return err
+}
+
 const updateFileVersion = `-- name: UpdateFileVersion :exec
 UPDATE files
 SET 

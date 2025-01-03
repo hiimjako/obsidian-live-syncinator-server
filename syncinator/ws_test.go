@@ -57,6 +57,8 @@ func Test_wsAuth(t *testing.T) {
 		sender, _, err := websocket.Dial(ctx, url, nil)
 		require.NoError(t, err)
 
+		time.Sleep(100 * time.Millisecond)
+
 		handler.subscribersMu.Lock()
 		assert.Len(t, handler.subscribers, 1)
 		for subscriber := range handler.subscribers {
@@ -69,7 +71,7 @@ func Test_wsAuth(t *testing.T) {
 	})
 
 	t.Run("unauthorized", func(t *testing.T) {
-		var workspaceID int64 = 10
+		var workspaceID int64 = 11
 		url := createWsUrlWithAuth(t, ts.URL, workspaceID, []byte("invalid secret"))
 
 		//nolint:bodyclose
@@ -92,7 +94,7 @@ func Test_handleChunk(t *testing.T) {
 			DiskPath:      diskPath,
 			WorkspacePath: "workspace_path",
 			MimeType:      "text/plain",
-			Hash:          "",
+			Hash:          "oldHash",
 			WorkspaceID:   workspaceID,
 		})
 		require.NoError(t, err)
@@ -193,6 +195,7 @@ func Test_handleChunk(t *testing.T) {
 		assert.Equal(t, int64(1), handler.files[file.ID].Version)
 		assert.Equal(t, int64(1), updatedFile.Version)
 		assert.Greater(t, updatedFile.UpdatedAt, file.UpdatedAt)
+		assert.Equal(t, "334d016f755cd6dc58c53a86e183882f8ec14f52fb05345887c8a5edd42c87b7", updatedFile.Hash)
 
 		// check operation history
 		operations, err := handler.db.FetchFileOperationsFromVersion(
@@ -241,7 +244,7 @@ func Test_handleChunk(t *testing.T) {
 			Hash:          "",
 			WorkspaceID:   workspaceID,
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		authOptions := Options{JWTSecret: []byte("secret")}
 		handler := New(db, fs, authOptions)
@@ -399,7 +402,7 @@ func Test_handleChunk(t *testing.T) {
 		assert.Equal(t, "Hello!", client1Content)
 
 		updatedFile, err := handler.db.FetchFile(context.Background(), file.ID)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		assert.Equal(t, int64(2), handler.files[file.ID].Version)
 		assert.Equal(t, int64(2), updatedFile.Version)
@@ -413,7 +416,7 @@ func Test_handleChunk(t *testing.T) {
 				WorkspaceID: workspaceID,
 			},
 		)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		require.Len(t, operations, 2)
 
 		assert.Equal(t, []repository.Operation{

@@ -11,6 +11,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/syncinator/diff"
+	"github.com/hiimjako/syncinator/syncinator/filestorage"
 	"github.com/hiimjako/syncinator/syncinator/middleware"
 )
 
@@ -164,11 +165,11 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	}
 
 	txq := s.db.WithTx(tx)
-	//nolint
 	defer func() {
 		if committed {
 			s.files[data.FileID] = file
 		} else {
+			//nolint
 			tx.Rollback()
 		}
 	}()
@@ -283,17 +284,32 @@ func (s *syncinator) deleteOldOperations() {
 }
 
 func (s *syncinator) applyChunkToFile(chunkMsg ChunkMessage) error {
-	file, err := s.db.FetchFile(s.ctx, chunkMsg.FileID)
+	dbFile, err := s.db.FetchFile(s.ctx, chunkMsg.FileID)
 	if err != nil {
 		return err
 	}
 
-	// FIXME: add a rollback strategy
 	for _, d := range chunkMsg.Chunks {
-		err := s.storage.PersistChunk(file.DiskPath, d)
+		err := s.storage.PersistChunk(dbFile.DiskPath, d)
 		if err != nil {
 			log.Println(err)
 		}
+	}
+
+	file, err := s.storage.ReadObject(dbFile.DiskPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	hash := filestorage.GenerateHash(file)
+
+	err = s.db.UpdateFileHash(s.ctx, repository.UpdateFileHashParams{
+		ID:   dbFile.ID,
+		Hash: hash,
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil

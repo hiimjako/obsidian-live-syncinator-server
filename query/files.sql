@@ -52,3 +52,9 @@ SET
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?;
 
+-- name: UpdateFileHash :exec
+UPDATE files
+SET 
+    hash = ?
+WHERE id = ?;
+
