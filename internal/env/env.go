@@ -18,6 +18,7 @@ type EnvVariables struct {
 	SqliteFilepath string        `env:"SQLITE_FILEPATH,default=./data/db.sqlite3"`
 	JWTSecret      []byte        `env:"JWT_SECRET,required"`
 	CacheMaxAge    time.Duration `env:"CACHE_MAX_AGE,default=1h"`
+	MaxFileSizeMB  int64         `env:"MAX_FILE_SIZE,default=1024"`
 }
 
 func LoadEnv(paths ...string) *EnvVariables {
