@@ -1,11 +1,13 @@
 package syncinator
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -47,6 +49,7 @@ const (
 
 func (s *syncinator) apiHandler() http.Handler {
 	router := http.NewServeMux()
+	router.HandleFunc("GET /export", s.exportHandler)
 	router.HandleFunc("GET /file", s.listFilesHandler)
 	router.HandleFunc("GET /file/{id}", s.fetchFileHandler)
 	router.HandleFunc("POST /file", s.createFileHandler)
@@ -66,6 +69,51 @@ func (s *syncinator) apiHandler() http.Handler {
 
 	routerWithStack := stack(router)
 	return routerWithStack
+}
+
+func (s *syncinator) exportHandler(w http.ResponseWriter, r *http.Request) {
+	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+
+	files, err := s.db.FetchFiles(r.Context(), workspaceID)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	zipWriter := zip.NewWriter(w)
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set(
+		"Content-Disposition",
+		fmt.Sprintf("attachment; filename=workspace-%d-%s.zip", workspaceID, time.Now().Format(time.DateOnly)),
+	)
+	for _, file := range files {
+		f, err := zipWriter.Create(file.WorkspacePath)
+		if err != nil {
+			http.Error(w, "Failed to create file in zip", http.StatusInternalServerError)
+			return
+		}
+
+		r, err := s.storage.ReadObject(file.DiskPath)
+		if err != nil {
+			http.Error(w, "Failed to create file in zip", http.StatusInternalServerError)
+			return
+		}
+
+		_, err = io.Copy(f, r)
+		if err != nil {
+			http.Error(w, "Failed to write content to zip", http.StatusInternalServerError)
+			return
+		}
+		r.Close()
+	}
+
+	err = zipWriter.Close()
+	if err != nil {
+		log.Printf("Failed to close zip writer: %v", err)
+		http.Error(w, "Failed to create zip file", http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *syncinator) listFilesHandler(w http.ResponseWriter, r *http.Request) {

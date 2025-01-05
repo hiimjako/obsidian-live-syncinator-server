@@ -1,13 +1,17 @@
 package syncinator
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/internal/testutils"
@@ -82,6 +86,90 @@ func Test_listFilesHandler(t *testing.T) {
 
 	// check mock assertions
 	mockFileStorage.AssertNumberOfCalls(t, "CreateObject", len(filesToInsert))
+}
+
+// Test_exportHandler tests the exportHandler
+func Test_exportHandler(t *testing.T) {
+	fs := filestorage.NewDisk(t.TempDir())
+	db := testutils.CreateDB(t)
+	options := Options{JWTSecret: []byte("secret")}
+	server := New(db, fs, options)
+
+	t.Cleanup(func() { server.Close() })
+
+	workspaceID := int64(10)
+	filesToInsert := []struct {
+		file        []byte
+		filepath    string
+		workspaceID int64
+	}{
+		{
+			file:        []byte("here a new file 1!"),
+			filepath:    "/home/file/1",
+			workspaceID: workspaceID,
+		},
+		{
+			file:        []byte("here a new file 2!"),
+			filepath:    "/home/file/2",
+			workspaceID: workspaceID,
+		},
+	}
+
+	for _, f := range filesToInsert {
+		form, contentType := testutils.CreateMultipart(t, f.filepath, f.file, false)
+		res, _ := testutils.DoRequest[repository.File](
+			t,
+			server,
+			http.MethodPost,
+			PathHttpApi+"/file",
+			form,
+			testutils.WithAuthHeader(options.JWTSecret, f.workspaceID),
+			testutils.WithContentTypeHeader(contentType),
+		)
+		assert.Equal(t, http.StatusCreated, res.Code)
+	}
+
+	res, body := testutils.DoRequest[string](
+		t,
+		server,
+		http.MethodGet,
+		PathHttpApi+"/export",
+		nil,
+		testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+	)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Equal(t, "application/zip", res.Header().Get("Content-Type"))
+
+	contentDisposition := res.Header().Get("Content-Disposition")
+	archiveName := fmt.Sprintf("workspace-%d-%s.zip", workspaceID, time.Now().Format(time.DateOnly))
+	assert.Contains(t, contentDisposition, archiveName)
+
+	// Read the zip content
+	zipReader, err := zip.NewReader(strings.NewReader(body), int64(len(body)))
+	require.NoError(t, err)
+	assert.Len(t, zipReader.File, 2)
+
+	for _, wantFile := range filesToInsert {
+		found := false
+		for _, zipFile := range zipReader.File {
+			if zipFile.Name != wantFile.filepath {
+				continue
+			}
+
+			found = true
+
+			rc, err := zipFile.Open()
+			assert.NoError(t, err)
+
+			content, err := io.ReadAll(rc)
+			rc.Close()
+			assert.NoError(t, err)
+
+			assert.Equal(t, wantFile.file, content)
+			break
+		}
+		assert.True(t, found)
+	}
 }
 
 // Test_fetchFileHandler tests the fetchFileHandler using mocked storage
