@@ -6,8 +6,8 @@ The Obsidian-Live-Syncinator-Server is the server of the plugin [syncinator](htt
 Create a `.env`:
 ```sh
 JWT_SECRET=secret
-STORAGE_DIR=/data
-SQLITE_FILEPATH=/data/db.sqlite3
+STORAGE_DIR=./data
+SQLITE_FILEPATH=./data/db.sqlite3
 ```
 
 Start the docker container: 
