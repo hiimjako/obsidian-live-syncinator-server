@@ -11,7 +11,6 @@ import (
 	"net/textproto"
 	"path"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/hiimjako/syncinator/internal/repository"
@@ -19,6 +18,7 @@ import (
 	"github.com/hiimjako/syncinator/syncinator/diff"
 	"github.com/hiimjako/syncinator/syncinator/filestorage"
 	"github.com/hiimjako/syncinator/syncinator/middleware"
+	"github.com/hiimjako/syncinator/syncinator/mimeutils"
 )
 
 const (
@@ -184,7 +184,7 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 		"Content-Type":        []string{file.MimeType},
 		"Content-Disposition": []string{fmt.Sprintf(`form-data; filename=%q`, filename)},
 	}
-	if !strings.HasPrefix(file.MimeType, "text/") {
+	if !mimeutils.IsText(file.MimeType) {
 		mimeHeader["Content-Transfer-Encoding"] = []string{"base64"}
 	}
 
@@ -196,7 +196,7 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 
 	var writer = filePart
 	// if it is a non text file encode it in base64
-	if !strings.HasPrefix(file.MimeType, "text/") {
+	if !mimeutils.IsText(file.MimeType) {
 		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
 		defer encoder.Close()
 
