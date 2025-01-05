@@ -161,6 +161,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 
 	file.Content = diff.ApplyMultiple(file.Content, chunkToApply)
 	file.Version += 1
+	file.UpdatedAt = time.Now()
 
 	msgToBroadcast := ChunkMessage{
 		WsMessageHeader: data.WsMessageHeader,
@@ -282,15 +283,27 @@ func (s *syncinator) internalBusProcessor() {
 	}
 }
 
-// deleteOldOperations is a routine to delete old operation from "operations" table
-func (s *syncinator) deleteOldOperations() {
+// purgeCache is a routine to delete old cached items:
+// - operation from "operations" table
+// - files loaded in memory
+func (s *syncinator) purgeCache() {
 	ticker := time.NewTicker(10 * time.Minute)
 	for {
 		<-ticker.C
-		err := s.db.DeleteOperationOlderThan(s.ctx, time.Now().Add(-s.operationMaxAge))
+		// removing items from operation table
+		err := s.db.DeleteOperationOlderThan(s.ctx, time.Now().Add(-s.cacheMaxAge))
 		if err != nil {
 			log.Println("error while removing old operations", err)
 		}
+
+		// removing items from files
+		s.mut.Lock()
+		for key, file := range s.files {
+			if time.Since(file.UpdatedAt) >= s.cacheMaxAge {
+				delete(s.files, key)
+			}
+		}
+		s.mut.Unlock()
 	}
 }
 
