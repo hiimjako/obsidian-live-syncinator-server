@@ -55,7 +55,6 @@ GOOSE_DRIVER=sqlite GOOSE_MIGRATION_DIR=./internal/migration/migrations/ goose c
 
 # TODO
 
-- Lazy load files in memory and remove from memory after some time, to reduce the memory usage on unmodified files.
 - Create a GET /export to export workspace as zip
 - Create cluster of servers
 - Ad DST (deterministic simulation testing) to test chunks

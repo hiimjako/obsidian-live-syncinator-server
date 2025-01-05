@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/hiimjako/syncinator/syncinator/diff"
 	"github.com/hiimjako/syncinator/syncinator/filestorage"
 	"github.com/hiimjako/syncinator/syncinator/middleware"
+	"github.com/hiimjako/syncinator/syncinator/mimeutils"
 )
 
 type MessageType = int
@@ -89,15 +92,23 @@ func (s *syncinator) onEventMessage(sender *subscriber, event EventMessage) {
 }
 
 func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-
 	if len(data.Chunks) == 0 {
 		log.Printf("0 chunks, skipping message. fileId: %v, version: %v\n", data.FileID, data.Version)
 		return
 	}
 
-	file := s.files[data.FileID]
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
+	file, ok := s.files[data.FileID]
+	if !ok {
+		err := s.loadFileInCache(data.FileID)
+		if err != nil {
+			log.Printf("error while caching file %v: %v\n", data.FileID, err)
+			return
+		}
+		file = s.files[data.FileID]
+	}
 
 	chunkToApply := data.Chunks
 
@@ -326,4 +337,35 @@ func (s *syncinator) deleteSubscriber(sub *subscriber) {
 	s.subscribersMu.Lock()
 	delete(s.subscribers, sub)
 	s.subscribersMu.Unlock()
+}
+
+// loadFileInCache caches the file from db
+// is not thread safe
+func (s *syncinator) loadFileInCache(fileID int64) error {
+	file, err := s.db.FetchFile(s.ctx, fileID)
+	if err != nil {
+		return err
+	}
+
+	if !mimeutils.IsText(file.MimeType) {
+		return fmt.Errorf("file %v is not a textfile", file.ID)
+	}
+
+	fileReader, err := s.storage.ReadObject(file.DiskPath)
+	if err != nil {
+		log.Panicf("error while reading file, %v\n", err)
+	}
+
+	fileContent, err := io.ReadAll(fileReader)
+	if err != nil {
+		log.Panicf("error while reading file, %v\n", err)
+	}
+	fileReader.Close()
+
+	s.files[file.ID] = CachedFile{
+		File:    file,
+		Content: string(fileContent),
+	}
+
+	return nil
 }

@@ -3,8 +3,6 @@ package syncinator
 import (
 	"context"
 	"database/sql"
-	"io"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -86,8 +84,6 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 		db:             repo,
 	}
 
-	s.init()
-
 	s.serverMux.Handle(PathHttpApi+"/", http.StripPrefix(PathHttpApi, s.apiHandler()))
 	s.serverMux.Handle(PathHttpAuth+"/", http.StripPrefix(PathHttpAuth, s.authHandler()))
 	s.serverMux.Handle(PathWebSocket, s.wsHandler())
@@ -96,31 +92,6 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 	go s.deleteOldOperations()
 
 	return s
-}
-
-func (s *syncinator) init() {
-	files, err := s.db.FetchAllTextFiles(s.ctx)
-	if err != nil {
-		log.Panicf("error while fetching all files, %v\n", err)
-	}
-
-	for _, file := range files {
-		fileReader, err := s.storage.ReadObject(file.DiskPath)
-		if err != nil {
-			log.Panicf("error while reading file, %v\n", err)
-		}
-
-		fileContent, err := io.ReadAll(fileReader)
-		if err != nil {
-			log.Panicf("error while reading file, %v\n", err)
-		}
-		fileReader.Close()
-
-		s.files[file.ID] = CachedFile{
-			File:    file,
-			Content: string(fileContent),
-		}
-	}
 }
 
 func (s *syncinator) Close() error {
