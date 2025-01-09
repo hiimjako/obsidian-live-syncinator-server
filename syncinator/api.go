@@ -425,6 +425,7 @@ func (s *syncinator) updateFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(updatedFile); err != nil {
 		http.Error(w, "error sending request body", http.StatusInternalServerError)
