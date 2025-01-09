@@ -128,7 +128,7 @@ func (s *syncinator) listFilesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(files); err != nil {
-		http.Error(w, "error reading request body", http.StatusInternalServerError)
+		http.Error(w, "error sending request body", http.StatusInternalServerError)
 		return
 	}
 }
@@ -176,7 +176,7 @@ func (s *syncinator) listOperationsHandler(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(operations); err != nil {
-		http.Error(w, "error reading request body", http.StatusInternalServerError)
+		http.Error(w, "error sending request body", http.StatusInternalServerError)
 		return
 	}
 }
@@ -334,7 +334,7 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(dbFile); err != nil {
-		http.Error(w, "error reading request body", http.StatusInternalServerError)
+		http.Error(w, "error sending request body", http.StatusInternalServerError)
 		return
 	}
 }
@@ -419,5 +419,15 @@ func (s *syncinator) updateFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	updatedFile, err := s.db.FetchFile(r.Context(), int64(fileId))
+	if err != nil {
+		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(updatedFile); err != nil {
+		http.Error(w, "error sending request body", http.StatusInternalServerError)
+		return
+	}
 }

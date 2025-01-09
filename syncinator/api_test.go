@@ -638,11 +638,13 @@ func Test_updateFileHandler(t *testing.T) {
 		)
 		assert.Equal(t, http.StatusCreated, res.Code)
 
+		time.Sleep(1 * time.Second)
+
 		// updating a file
 		updateData := UpdateFileBody{
 			Path: "/home/new-fancy-name",
 		}
-		res, updateBody := testutils.DoRequest[string](
+		res, updateBody := testutils.DoRequest[repository.File](
 			t,
 			server,
 			http.MethodPatch,
@@ -650,8 +652,9 @@ func Test_updateFileHandler(t *testing.T) {
 			updateData,
 			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
 		)
-		assert.Equal(t, http.StatusNoContent, res.Code)
-		assert.Equal(t, "", updateBody)
+		assert.Equal(t, http.StatusOK, res.Code)
+		assert.Greater(t, updateBody.UpdatedAt, createBody.UpdatedAt)
+		assert.Equal(t, updateData.Path, updateBody.WorkspacePath)
 
 		// check db
 		files, err := server.db.FetchWorkspaceFiles(context.Background(), workspaceID)
