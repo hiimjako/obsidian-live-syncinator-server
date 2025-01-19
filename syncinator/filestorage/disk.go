@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 
@@ -24,8 +23,8 @@ func NewDisk(basepath string) Disk {
 
 func (d Disk) CreateObject(file io.Reader) (string, error) {
 	id := uuid.New().String()
-	relativePath := path.Join(strings.Split(id, "-")...)
-	diskPath := path.Join(d.basepath, relativePath)
+	relativePath := filepath.Join(strings.Split(id, "-")...)
+	diskPath := filepath.Join(d.basepath, relativePath)
 
 	_, err := os.Stat(diskPath)
 	if os.IsExist(err) {
@@ -39,7 +38,7 @@ func (d Disk) CreateObject(file io.Reader) (string, error) {
 
 	dst, err := os.Create(diskPath)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	defer dst.Close()
 
@@ -52,7 +51,7 @@ func (d Disk) CreateObject(file io.Reader) (string, error) {
 }
 
 func (d Disk) DeleteObject(relativePath string) error {
-	diskPath := path.Join(d.basepath, relativePath)
+	diskPath := filepath.Join(d.basepath, relativePath)
 
 	_, err := os.Stat(diskPath)
 	if os.IsNotExist(err) {
@@ -65,25 +64,24 @@ func (d Disk) DeleteObject(relativePath string) error {
 }
 
 func (d Disk) ReadObject(relativePath string) (io.ReadCloser, error) {
-	diskPath := path.Join(d.basepath, relativePath)
+	diskPath := filepath.Join(d.basepath, relativePath)
 
 	return os.Open(diskPath)
 }
 
 func (d Disk) PersistChunk(relativePath string, chunk diff.Chunk) error {
-	diskPath := path.Join(d.basepath, relativePath)
+	diskPath := filepath.Join(d.basepath, relativePath)
 
 	_, err := os.Stat(diskPath)
 	if os.IsNotExist(err) {
 		return err
 	}
 
-	relativePath = path.Join(d.basepath, relativePath)
 	switch chunk.Type {
 	case diff.Add:
-		return addBytesToFile(relativePath, chunk.Position, chunk.Text)
+		return addBytesToFile(diskPath, chunk.Position, chunk.Text)
 	case diff.Remove:
-		return removeBytesFromFile(relativePath, chunk.Position, chunk.Len)
+		return removeBytesFromFile(diskPath, chunk.Position, chunk.Len)
 	}
 	return fmt.Errorf("diff type %v not supported", chunk.Type)
 }
