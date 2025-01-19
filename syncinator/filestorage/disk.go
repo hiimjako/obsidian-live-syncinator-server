@@ -160,5 +160,10 @@ func removeBytesFromFile(filePath string, start, length int64) error {
 		return err
 	}
 
+	err = file.Sync()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
