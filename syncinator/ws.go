@@ -213,9 +213,11 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	s.storageQueue <- msgToBroadcast
 	s.broadcastMessage(sender, msgToBroadcast)
 
-	if err := tx.Commit(); err == nil {
-		committed = true
+	if err := tx.Commit(); err != nil {
+		log.Printf("failed to commit transaction: %v", err)
+		return
 	}
+	committed = true
 }
 
 func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
@@ -289,21 +291,26 @@ func (s *syncinator) internalBusProcessor() {
 func (s *syncinator) purgeCache() {
 	ticker := time.NewTicker(10 * time.Minute)
 	for {
-		<-ticker.C
-		// removing items from operation table
-		err := s.db.DeleteOperationOlderThan(s.ctx, time.Now().Add(-s.cacheMaxAge))
-		if err != nil {
-			log.Println("error while removing old operations", err)
-		}
-
-		// removing items from files
-		s.mut.Lock()
-		for key, file := range s.files {
-			if time.Since(file.UpdatedAt) >= s.cacheMaxAge {
-				delete(s.files, key)
+		select {
+		case <-ticker.C:
+			// removing items from operation table
+			err := s.db.DeleteOperationOlderThan(s.ctx, time.Now().Add(-s.cacheMaxAge))
+			if err != nil {
+				log.Println("error while removing old operations", err)
 			}
+
+			// removing items from files
+			s.mut.Lock()
+			for key, file := range s.files {
+				if time.Since(file.UpdatedAt) >= s.cacheMaxAge {
+					delete(s.files, key)
+				}
+			}
+			s.mut.Unlock()
+
+		case <-s.ctx.Done():
+			return
 		}
-		s.mut.Unlock()
 	}
 }
 
@@ -368,12 +375,12 @@ func (s *syncinator) loadFileInCache(fileID int64) error {
 	if err != nil {
 		log.Panicf("error while reading file, %v\n", err)
 	}
+	defer fileReader.Close()
 
 	fileContent, err := io.ReadAll(fileReader)
 	if err != nil {
 		log.Panicf("error while reading file, %v\n", err)
 	}
-	fileReader.Close()
 
 	s.files[file.ID] = CachedFile{
 		File:    file,
