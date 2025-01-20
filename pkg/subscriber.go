@@ -13,7 +13,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/google/uuid"
-	"github.com/hiimjako/syncinator/syncinator/middleware"
+	"github.com/hiimjako/syncinator/pkg/middleware"
 )
 
 type subscriber struct {

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/hiimjako/syncinator/internal/repository"
-	"github.com/hiimjako/syncinator/syncinator/filestorage"
+	"github.com/hiimjako/syncinator/pkg/filestorage"
 	"golang.org/x/time/rate"
 )
 

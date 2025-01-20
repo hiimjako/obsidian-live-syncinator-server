@@ -13,8 +13,8 @@ import (
 
 	"github.com/hiimjako/syncinator/internal/env"
 	"github.com/hiimjako/syncinator/internal/migration"
-	"github.com/hiimjako/syncinator/syncinator"
-	"github.com/hiimjako/syncinator/syncinator/filestorage"
+	"github.com/hiimjako/syncinator/pkg"
+	"github.com/hiimjako/syncinator/pkg/filestorage"
 
 	_ "github.com/mattn/go-sqlite3"
 )

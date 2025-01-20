@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/hiimjako/syncinator/syncinator/diff"
+	"github.com/hiimjako/syncinator/pkg/diff"
 )
 
 type Disk struct {

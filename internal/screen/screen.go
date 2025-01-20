@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/hiimjako/syncinator/syncinator/diff"
+	"github.com/hiimjako/syncinator/pkg/diff"
 )
 
 const (

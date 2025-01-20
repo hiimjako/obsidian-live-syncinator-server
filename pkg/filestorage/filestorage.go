@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"io"
 
-	"github.com/hiimjako/syncinator/syncinator/diff"
+	"github.com/hiimjako/syncinator/pkg/diff"
 )
 
 type Storage interface {

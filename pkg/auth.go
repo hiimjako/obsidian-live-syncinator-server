@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/hiimjako/syncinator/syncinator/middleware"
+	"github.com/hiimjako/syncinator/pkg/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
 

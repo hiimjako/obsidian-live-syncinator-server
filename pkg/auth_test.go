@@ -10,7 +10,7 @@ import (
 	"github.com/hiimjako/syncinator/internal/migration"
 	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/internal/testutils"
-	"github.com/hiimjako/syncinator/syncinator/filestorage"
+	"github.com/hiimjako/syncinator/pkg/filestorage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
