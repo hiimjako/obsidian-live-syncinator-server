@@ -1,4 +1,4 @@
-FROM golang:1.23.3-alpine AS build
+FROM golang:1.23.5-alpine AS build
 
 RUN addgroup -g 501 app \
     && adduser --disabled-password \
