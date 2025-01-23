@@ -2,13 +2,13 @@
 run:
 	@go run cmd/main.go
 
-.PHONY: editor
-editor:
-	@go run cmd/editor/* 2>editor.log
-
 .PHONY: test
 test:
 	go test ./... -count 1 -race -timeout 30s
+
+.PHONY: bench
+bench:
+	go test ./... -count 1 -bench . -benchmem -run none        
 
 .PHONY: lint
 lint:
@@ -18,7 +18,3 @@ lint:
 .PHONY: generate
 generate:
 	sqlc generate
-
-
-
-

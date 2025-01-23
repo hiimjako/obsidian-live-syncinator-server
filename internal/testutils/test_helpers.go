@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func CreateDB(t *testing.T) *sql.DB {
+func CreateDB(t testing.TB) *sql.DB {
 	// https://stackoverflow.com/a/77150429
 	db, err := sql.Open("sqlite3", "file:memdb1?mode=memory&cache=shared")
 	require.NoError(t, err)

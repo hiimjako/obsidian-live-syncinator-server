@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -545,4 +547,48 @@ func marshal(t *testing.T, thing any) string {
 	j, err := json.Marshal(thing)
 	require.NoError(t, err)
 	return string(j)
+}
+
+func Benchmark_onChunkMessage(b *testing.B) {
+	log.SetOutput(io.Discard)
+
+	fs := filestorage.NewDisk(b.TempDir())
+	diskPath, err := fs.CreateObject(strings.NewReader(""))
+	require.NoError(b, err)
+
+	db := testutils.CreateDB(b)
+	repo := repository.New(db)
+
+	var workspaceID int64 = 1
+	file, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath:      diskPath,
+		WorkspacePath: "workspace_path",
+		MimeType:      "text/plain",
+		Hash:          "",
+		WorkspaceID:   workspaceID,
+	})
+	require.NoError(b, err)
+
+	authOptions := Options{JWTSecret: []byte("secret")}
+	handler := New(db, fs, authOptions)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		msg := ChunkMessage{
+			WsMessageHeader: WsMessageHeader{
+				Type:   ChunkEventType,
+				FileID: file.ID,
+			},
+			Version: int64(i),
+			Chunks: []diff.Chunk{
+				{
+					Position: 0,
+					Type:     diff.Add,
+					Text:     "Hello!",
+					Len:      6,
+				},
+			},
+		}
+		handler.onChunkMessage(nil, msg)
+	}
 }
