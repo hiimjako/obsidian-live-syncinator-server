@@ -315,28 +315,34 @@ func (s *syncinator) purgeCache() {
 }
 
 func (s *syncinator) applyChunkToFile(chunkMsg ChunkMessage) error {
-	dbFile, err := s.db.FetchFile(s.ctx, chunkMsg.FileID)
-	if err != nil {
-		return err
+	s.mut.RLock()
+	file, ok := s.files[chunkMsg.FileID]
+	if !ok {
+		err := s.loadFileInCache(chunkMsg.FileID)
+		if err != nil {
+			return fmt.Errorf("error while applying chunk: %v", err)
+		}
+		file = s.files[chunkMsg.FileID]
 	}
+	s.mut.RUnlock()
 
 	for _, d := range chunkMsg.Chunks {
-		err := s.storage.PersistChunk(dbFile.DiskPath, d)
+		err := s.storage.PersistChunk(file.DiskPath, d)
 		if err != nil {
 			log.Println(err)
 		}
 	}
 
-	file, err := s.storage.ReadObject(dbFile.DiskPath)
+	fileReader, err := s.storage.ReadObject(file.DiskPath)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer fileReader.Close()
 
-	hash := filestorage.GenerateHash(file)
+	hash := filestorage.GenerateHash(fileReader)
 
 	err = s.db.UpdateFileHash(s.ctx, repository.UpdateFileHashParams{
-		ID:   dbFile.ID,
+		ID:   file.ID,
 		Hash: hash,
 	})
 	if err != nil {
