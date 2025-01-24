@@ -56,6 +56,10 @@ volumes:
 GOOSE_DRIVER=sqlite GOOSE_MIGRATION_DIR=./internal/migration/migrations/ goose create new_migration_name sql
 ```
 
+# Disclaimer
+
+This is recreational software provided as-is, without any warranty. While the plugin is functional, I do not assume any responsibility for potential data loss or other issues that may arise from its use. Always maintain backups of your important data before using any synchronization tools.
+
 # TODO
 
 - Create cluster of servers
