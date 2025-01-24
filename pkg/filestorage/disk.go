@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/hiimjako/syncinator/pkg/diff"
 )
 
 type Disk struct {
@@ -69,7 +68,7 @@ func (d Disk) ReadObject(relativePath string) (io.ReadCloser, error) {
 	return os.Open(diskPath)
 }
 
-func (d Disk) PersistChunk(relativePath string, chunk diff.Chunk) error {
+func (d Disk) WriteObject(relativePath string, content io.Reader) error {
 	diskPath := filepath.Join(d.basepath, relativePath)
 
 	_, err := os.Stat(diskPath)
@@ -77,90 +76,27 @@ func (d Disk) PersistChunk(relativePath string, chunk diff.Chunk) error {
 		return err
 	}
 
-	switch chunk.Type {
-	case diff.Add:
-		return addBytesToFile(diskPath, chunk.Position, chunk.Text)
-	case diff.Remove:
-		return removeBytesFromFile(diskPath, chunk.Position, chunk.Len)
-	}
-	return fmt.Errorf("diff type %v not supported", chunk.Type)
-}
-
-func addBytesToFile(filePath string, start int64, str string) error {
-	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0644)
+	tmpPath := diskPath + ".tmp"
+	file, err := os.Create(tmpPath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	_, err = file.Seek(start, 0)
+	_, err = io.Copy(file, content)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write content: %w", err)
 	}
 
-	remainder, err := io.ReadAll(file)
-	if err != nil {
-		return err
-	}
-
-	_, err = file.Seek(start, 0)
-	if err != nil {
-		return err
-	}
-
-	_, err = file.WriteString(str)
-	if err != nil {
-		return err
-	}
-
-	_, err = file.Write(remainder)
-	if err != nil {
-		return err
-	}
-
+	// TODO: avoid to call it each time, it is a cost.
 	err = file.Sync()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to sync file: %w", err)
 	}
 
-	return nil
-}
-
-func removeBytesFromFile(filePath string, start, length int64) error {
-	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0644)
+	err = os.Rename(tmpPath, diskPath)
 	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	_, err = file.Seek(start+length, 0)
-	if err != nil {
-		return err
-	}
-
-	remainingData, err := io.ReadAll(file)
-	if err != nil {
-		return err
-	}
-
-	_, err = file.Seek(start, 0)
-	if err != nil {
-		return err
-	}
-
-	_, err = file.Write(remainingData)
-	if err != nil {
-		return err
-	}
-
-	err = file.Truncate(start + int64(len(remainingData)))
-	if err != nil {
-		return err
-	}
-
-	err = file.Sync()
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to rename tmp file: %w", err)
 	}
 
 	return nil

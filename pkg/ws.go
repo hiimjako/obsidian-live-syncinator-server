@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -161,6 +162,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 
 	file.Content = diff.ApplyMultiple(file.Content, chunkToApply)
 	file.Version += 1
+	file.pendingChanges += 1
 	file.UpdatedAt = time.Now()
 
 	msgToBroadcast := ChunkMessage{
@@ -210,7 +212,6 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		return
 	}
 
-	s.storageQueue <- msgToBroadcast
 	s.broadcastMessage(sender, msgToBroadcast)
 
 	if err := tx.Commit(); err != nil {
@@ -271,14 +272,35 @@ func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
 	}
 }
 
-func (s *syncinator) internalBusProcessor() {
+// processFileChanges monitors file changes and persists them to storage based on
+// two conditions:
+// - When number of pending changes exceeds minChangesThreshold
+// - When file hasn't been modified for flushInterval duration
+// The function runs until context cancellation.
+func (s *syncinator) processFileChanges() {
+	ticker := time.NewTicker(s.flushInterval)
 	for {
 		select {
-		case chunkMsg := <-s.storageQueue:
-			err := s.applyChunkToFile(chunkMsg)
-			if err != nil {
-				log.Println(err)
+		case <-ticker.C:
+			s.mut.Lock()
+			for _, file := range s.files {
+				if file.pendingChanges <= 0 {
+					continue
+				}
+
+				if file.pendingChanges > s.minChangesThreshold ||
+					time.Since(file.UpdatedAt) >= s.flushInterval {
+					err := s.writeFileToStorage(
+						file,
+					)
+					if err != nil {
+						log.Println(
+							err,
+						)
+					}
+				}
 			}
+			s.mut.Unlock()
 		case <-s.ctx.Done():
 			return
 		}
@@ -303,6 +325,10 @@ func (s *syncinator) purgeCache() {
 			s.mut.Lock()
 			for key, file := range s.files {
 				if time.Since(file.UpdatedAt) >= s.cacheMaxAge {
+					err := s.writeFileToStorage(file)
+					if err != nil {
+						log.Printf("error while writing file %d before purge: %v\n", file.ID, err)
+					}
 					delete(s.files, key)
 				}
 			}
@@ -314,31 +340,13 @@ func (s *syncinator) purgeCache() {
 	}
 }
 
-func (s *syncinator) applyChunkToFile(chunkMsg ChunkMessage) error {
-	s.mut.RLock()
-	file, ok := s.files[chunkMsg.FileID]
-	if !ok {
-		err := s.loadFileInCache(chunkMsg.FileID)
-		if err != nil {
-			return fmt.Errorf("error while applying chunk: %v", err)
-		}
-		file = s.files[chunkMsg.FileID]
-	}
-	s.mut.RUnlock()
-
-	for _, d := range chunkMsg.Chunks {
-		err := s.storage.PersistChunk(file.DiskPath, d)
-		if err != nil {
-			log.Println(err)
-		}
-	}
-
-	fileReader, err := s.storage.ReadObject(file.DiskPath)
+func (s *syncinator) writeFileToStorage(file CachedFile) error {
+	err := s.storage.WriteObject(file.DiskPath, strings.NewReader(file.Content))
 	if err != nil {
 		return err
 	}
-	defer fileReader.Close()
 
+	fileReader := strings.NewReader(file.Content)
 	hash := filestorage.GenerateHash(fileReader)
 
 	err = s.db.UpdateFileHash(s.ctx, repository.UpdateFileHashParams{

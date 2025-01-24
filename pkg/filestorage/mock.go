@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/hiimjako/syncinator/pkg/diff"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -13,8 +12,8 @@ type MockFileStorage struct {
 	mock.Mock
 }
 
-func (m *MockFileStorage) PersistChunk(p string, d diff.Chunk) error {
-	args := m.Called(p, d)
+func (m *MockFileStorage) WriteObject(p string, c io.Reader) error {
+	args := m.Called(p, c)
 	return args.Error(0)
 }
 

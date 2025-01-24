@@ -21,9 +21,11 @@ const (
 )
 
 type Options struct {
-	JWTSecret     []byte
-	MaxFileSizeMB int64
-	CacheMaxAge   time.Duration
+	JWTSecret           []byte
+	MaxFileSizeMB       int64
+	CacheMaxAge         time.Duration
+	MinChangesThreshold int64
+	FlushInterval       time.Duration
 }
 
 func (o *Options) Default() {
@@ -34,11 +36,20 @@ func (o *Options) Default() {
 	if o.CacheMaxAge <= 0 {
 		o.CacheMaxAge = 0
 	}
+
+	if o.MinChangesThreshold < 0 {
+		o.MinChangesThreshold = 5
+	}
+
+	if o.FlushInterval <= 0 {
+		o.FlushInterval = 1 * time.Minute
+	}
 }
 
 type CachedFile struct {
 	repository.File
-	Content string
+	Content        string
+	pendingChanges int64
 }
 
 type syncinator struct {
@@ -46,16 +57,17 @@ type syncinator struct {
 	cancel context.CancelFunc
 	mut    sync.RWMutex
 
-	jwtSecret        []byte
-	maxFileSizeBytes int64
-	cacheMaxAge      time.Duration
+	jwtSecret           []byte
+	maxFileSizeBytes    int64
+	cacheMaxAge         time.Duration
+	minChangesThreshold int64
+	flushInterval       time.Duration
 
 	publishLimiter *rate.Limiter
 	serverMux      *http.ServeMux
 	subscribersMu  sync.Mutex
 	subscribers    map[*subscriber]struct{}
 	files          map[int64]CachedFile
-	storageQueue   chan ChunkMessage
 	storage        filestorage.Storage
 	db             *repository.Queries
 	conn           *sql.DB
@@ -70,15 +82,16 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 		ctx:    ctx,
 		cancel: cancel,
 
-		jwtSecret:        opts.JWTSecret,
-		maxFileSizeBytes: opts.MaxFileSizeMB << 20,
-		cacheMaxAge:      opts.CacheMaxAge,
+		jwtSecret:           opts.JWTSecret,
+		maxFileSizeBytes:    opts.MaxFileSizeMB << 20,
+		cacheMaxAge:         opts.CacheMaxAge,
+		minChangesThreshold: opts.MinChangesThreshold,
+		flushInterval:       opts.FlushInterval,
 
 		serverMux:      http.NewServeMux(),
 		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),
 		subscribers:    make(map[*subscriber]struct{}),
 		files:          make(map[int64]CachedFile),
-		storageQueue:   make(chan ChunkMessage, 128),
 		storage:        fs,
 		conn:           db,
 		db:             repo,
@@ -88,7 +101,7 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 	s.serverMux.Handle(PathHttpAuth+"/", http.StripPrefix(PathHttpAuth, s.authHandler()))
 	s.serverMux.Handle(PathWebSocket, s.wsHandler())
 
-	go s.internalBusProcessor()
+	go s.processFileChanges()
 	go s.purgeCache()
 
 	return s

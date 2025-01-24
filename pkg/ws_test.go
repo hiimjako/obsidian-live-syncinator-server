@@ -101,16 +101,16 @@ func Test_handleChunk(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		authOptions := Options{JWTSecret: []byte("secret")}
-		handler := New(db, fs, authOptions)
+		opts := Options{JWTSecret: []byte("secret"), FlushInterval: time.Second}
+		handler := New(db, fs, opts)
 		ts := httptest.NewServer(handler)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 		var workspaceID1 int64 = 1
 		var workspaceID2 int64 = 2
-		urlWorkspace1 := createWsUrlWithAuth(t, ts.URL, workspaceID1, authOptions.JWTSecret)
-		urlWorkspace2 := createWsUrlWithAuth(t, ts.URL, workspaceID2, authOptions.JWTSecret)
+		urlWorkspace1 := createWsUrlWithAuth(t, ts.URL, workspaceID1, opts.JWTSecret)
+		urlWorkspace2 := createWsUrlWithAuth(t, ts.URL, workspaceID2, opts.JWTSecret)
 
 		//nolint:bodyclose
 		senderWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)

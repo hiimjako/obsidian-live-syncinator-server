@@ -7,68 +7,37 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hiimjako/syncinator/pkg/diff"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestPersistChunk(t *testing.T) {
-	t.Run("happy path", func(t *testing.T) {
-		tests := []struct {
-			name     string
-			expected string
-			diffs    [][]diff.Chunk
-		}{
-			{
-				name:     "compute remove chunk in present file",
-				expected: "hello",
-				diffs: [][]diff.Chunk{
-					diff.Compute([]rune("hello"), []rune("")),
-					diff.Compute([]rune(""), []rune("he__llo")),
-					diff.Compute([]rune("he__llo"), []rune("hello")),
-				},
-			},
-			{
-				name:     "compute add chunk in present file",
-				expected: "hello world!",
-				diffs: [][]diff.Chunk{
-					diff.Compute([]rune(""), []rune("hello")),
-					diff.Compute([]rune("hello"), []rune("hello!")),
-					diff.Compute([]rune("hello!"), []rune("hello world!")),
-				},
-			},
-		}
-
+func TestWriteObject(t *testing.T) {
+	t.Run("should overwrite an existing file", func(t *testing.T) {
 		dir := t.TempDir()
 		d := NewDisk(dir)
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				filePath, err := d.CreateObject(strings.NewReader(""))
-				assert.NoError(t, err)
-				for _, di := range tt.diffs {
-					for _, d2 := range di {
-						assert.NoError(t, d.PersistChunk(filePath, d2))
-					}
-				}
 
-				fileContent, err := d.ReadObject(filePath)
-				require.NoError(t, err)
-				defer fileContent.Close()
+		filePath, err := d.CreateObject(strings.NewReader("foo"))
+		assert.NoError(t, err)
 
-				content := make([]byte, 512)
-				n, err := fileContent.Read(content)
-				require.NoError(t, err)
+		err = d.WriteObject(filePath, strings.NewReader("bar"))
+		assert.NoError(t, err)
 
-				assert.Equal(t, tt.expected, string(content[:n]))
-			})
-		}
+		fileContent, err := d.ReadObject(filePath)
+		require.NoError(t, err)
+		defer fileContent.Close()
+
+		content := make([]byte, 512)
+		n, err := fileContent.Read(content)
+		require.NoError(t, err)
+
+		assert.Equal(t, "bar", string(content[:n]))
 	})
 
 	t.Run("should return error on not existing file", func(t *testing.T) {
 		dir := t.TempDir()
 		d := NewDisk(dir)
 
-		assert.Error(t, d.PersistChunk("not-existing-file", diff.Compute([]rune(""), []rune("foo"))[0]))
+		assert.Error(t, d.WriteObject("not-existing-file", strings.NewReader("foo")))
 	})
 }
 

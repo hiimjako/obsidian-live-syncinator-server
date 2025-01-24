@@ -4,16 +4,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
-
-	"github.com/hiimjako/syncinator/pkg/diff"
 )
 
 type Storage interface {
-	// PersistChunk adds a chunk to the provided filepath, it returns an error
-	// if the file doesn't exists
-	PersistChunk(string, diff.Chunk) error
 	// CreateObject creates an object and returns the path
 	CreateObject(io.Reader) (string, error)
+	// WriteObject overwrites an object, it returns error if the files doesn't exists
+	WriteObject(string, io.Reader) error
 	// DeleteObject deletes an object
 	DeleteObject(string) error
 	// ReadObject reads an object
