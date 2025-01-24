@@ -11,7 +11,12 @@ RUN addgroup -g 501 app \
 
 WORKDIR /build
 
-RUN apk update && apk add --no-cache build-base
+RUN apk update && apk add --no-cache \
+    build-base \
+    gcc \
+    musl-dev \
+    git
+
 RUN go env -w GOMODCACHE=/root/.cache/go-build
 RUN go env -w CGO_ENABLED=1
 
