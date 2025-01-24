@@ -194,10 +194,12 @@ func Test_handleChunk(t *testing.T) {
 		updatedFile, err := handler.db.FetchFile(context.Background(), file.ID)
 		assert.NoError(t, err)
 
+		handler.mut.RLock()
 		assert.Equal(t, int64(1), handler.files[file.ID].Version)
 		assert.Equal(t, int64(1), updatedFile.Version)
 		assert.Greater(t, updatedFile.UpdatedAt, file.UpdatedAt)
 		assert.Equal(t, "334d016f755cd6dc58c53a86e183882f8ec14f52fb05345887c8a5edd42c87b7", updatedFile.Hash)
+		handler.mut.RUnlock()
 
 		// check operation history
 		operations, err := handler.db.FetchFileOperationsFromVersion(

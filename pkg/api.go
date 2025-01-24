@@ -182,14 +182,14 @@ func (s *syncinator) listOperationsHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
-	fileId, err := strconv.Atoi(r.PathValue("id"))
+	fileID, err := strconv.Atoi(r.PathValue("id"))
 
-	if fileId == 0 || err != nil {
+	if fileID == 0 || err != nil {
 		http.Error(w, "invalid file id", http.StatusBadRequest)
 		return
 	}
 
-	file, err := s.db.FetchFile(r.Context(), int64(fileId))
+	file, err := s.db.FetchFile(r.Context(), int64(fileID))
 	if err != nil {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return
@@ -198,6 +198,12 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
 	if file.WorkspaceID != workspaceID {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
+		return
+	}
+
+	err = s.WriteFileToStorage(file.ID)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 

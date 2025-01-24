@@ -279,29 +279,34 @@ func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
 // The function runs until context cancellation.
 func (s *syncinator) processFileChanges() {
 	ticker := time.NewTicker(s.flushInterval)
+
+	f := func() {
+		s.mut.Lock()
+		for fileID, file := range s.files {
+			if file.pendingChanges <= 0 {
+				continue
+			}
+
+			if file.pendingChanges > s.minChangesThreshold ||
+				time.Since(file.UpdatedAt) >= s.flushInterval {
+				err := s.writeFileToStorage(file)
+				if err != nil {
+					log.Println(err)
+				} else {
+					file.pendingChanges = 0
+					s.files[fileID] = file
+				}
+			}
+		}
+		s.mut.Unlock()
+	}
+
 	for {
 		select {
 		case <-ticker.C:
-			s.mut.Lock()
-			for _, file := range s.files {
-				if file.pendingChanges <= 0 {
-					continue
-				}
-
-				if file.pendingChanges > s.minChangesThreshold ||
-					time.Since(file.UpdatedAt) >= s.flushInterval {
-					err := s.writeFileToStorage(
-						file,
-					)
-					if err != nil {
-						log.Println(
-							err,
-						)
-					}
-				}
-			}
-			s.mut.Unlock()
+			f()
 		case <-s.ctx.Done():
+			f()
 			return
 		}
 	}
@@ -340,7 +345,35 @@ func (s *syncinator) purgeCache() {
 	}
 }
 
+func (s *syncinator) WriteFileToStorage(fileID int64) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	file, ok := s.files[fileID]
+	if !ok {
+		// not in cache, it means it is already up to date
+		return nil
+	}
+
+	if file.pendingChanges <= 0 {
+		return nil
+	}
+
+	err := s.writeFileToStorage(file)
+	if err != nil {
+		return err
+	}
+
+	file.pendingChanges = 0
+	s.files[fileID] = file
+
+	return nil
+}
+
 func (s *syncinator) writeFileToStorage(file CachedFile) error {
+	if file.pendingChanges <= 0 {
+		return nil
+	}
+
 	err := s.storage.WriteObject(file.DiskPath, strings.NewReader(file.Content))
 	if err != nil {
 		return err
