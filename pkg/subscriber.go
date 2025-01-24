@@ -40,7 +40,7 @@ func NewSubscriber(
 	onEventMessage func(*subscriber, EventMessage),
 ) (*subscriber, error) {
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: []string{"127.0.0.1", "obsidian.md"},
+		OriginPatterns: []string{"localhost", "127.0.0.1", "obsidian.md"},
 	})
 	if err != nil {
 		return nil, err
