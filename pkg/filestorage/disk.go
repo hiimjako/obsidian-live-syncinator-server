@@ -21,32 +21,37 @@ func NewDisk(basepath string) Disk {
 }
 
 func (d Disk) CreateObject(file io.Reader) (string, error) {
-	id := uuid.New().String()
-	relativePath := filepath.Join(strings.Split(id, "-")...)
-	diskPath := filepath.Join(d.basepath, relativePath)
+	const maxIterations = 100
+	for i := 0; i < maxIterations; i++ {
+		id := uuid.New().String()
+		relativePath := filepath.Join(strings.Split(id, "-")...)
+		diskPath := filepath.Join(d.basepath, relativePath)
 
-	_, err := os.Stat(diskPath)
-	if os.IsExist(err) {
-		return "", err
+		_, err := os.Stat(diskPath)
+		if os.IsExist(err) {
+			continue
+		}
+
+		dir := filepath.Dir(diskPath)
+		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+			return "", err
+		}
+
+		dst, err := os.Create(diskPath)
+		if err != nil {
+			return "", err
+		}
+
+		if _, err = io.Copy(dst, file); err != nil {
+			return "", err
+		}
+
+		dst.Close()
+
+		return relativePath, nil
 	}
 
-	dir := filepath.Dir(diskPath)
-	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		return "", err
-	}
-
-	dst, err := os.Create(diskPath)
-	if err != nil {
-		return "", err
-	}
-	defer dst.Close()
-
-	_, err = io.Copy(dst, file)
-	if err != nil {
-		return "", err
-	}
-
-	return relativePath, nil
+	return "", fmt.Errorf("failed to generate unique path after %d attempts", maxIterations)
 }
 
 func (d Disk) DeleteObject(relativePath string) error {
