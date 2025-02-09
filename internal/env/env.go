@@ -14,11 +14,13 @@ type EnvVariables struct {
 	Host string `env:"HOST,default=0.0.0.0"`
 	Port string `env:"PORT,default=8080"`
 
-	StorageDir     string        `env:"STORAGE_DIR,default=./data"`
-	SqliteFilepath string        `env:"SQLITE_FILEPATH,default=./data/db.sqlite3"`
-	JWTSecret      []byte        `env:"JWT_SECRET,required"`
-	CacheMaxAge    time.Duration `env:"CACHE_MAX_AGE,default=1h"`
-	MaxFileSizeMB  int64         `env:"MAX_FILE_SIZE,default=1024"`
+	StorageDir          string        `env:"STORAGE_DIR,default=./data"`
+	SqliteFilepath      string        `env:"SQLITE_FILEPATH,default=./data/db.sqlite3"`
+	JWTSecret           []byte        `env:"JWT_SECRET,required"`
+	CacheMaxAge         time.Duration `env:"CACHE_MAX_AGE,default=1h"`
+	FlushInterval       time.Duration `env:"FLUSH_INTERVAL,default=1m"`
+	MaxFileSizeMB       int64         `env:"MAX_FILE_SIZE,default=1024"`
+	MinChangesThreshold int64         `env:"MIN_CHANGES_THRESHOLD,default=3"`
 }
 
 func LoadEnv(paths ...string) *EnvVariables {

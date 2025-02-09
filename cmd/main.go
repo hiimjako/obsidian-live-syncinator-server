@@ -13,7 +13,7 @@ import (
 
 	"github.com/hiimjako/syncinator/internal/env"
 	"github.com/hiimjako/syncinator/internal/migration"
-	"github.com/hiimjako/syncinator/pkg"
+	syncinator "github.com/hiimjako/syncinator/pkg"
 	"github.com/hiimjako/syncinator/pkg/filestorage"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -52,9 +52,11 @@ func run(ev *env.EnvVariables) error {
 	disk := filestorage.NewDisk(ev.StorageDir)
 
 	handler := syncinator.New(dbSqlite, disk, syncinator.Options{
-		JWTSecret:     ev.JWTSecret,
-		CacheMaxAge:   ev.CacheMaxAge,
-		MaxFileSizeMB: ev.MaxFileSizeMB,
+		JWTSecret:           ev.JWTSecret,
+		CacheMaxAge:         ev.CacheMaxAge,
+		MaxFileSizeMB:       ev.MaxFileSizeMB,
+		MinChangesThreshold: ev.MinChangesThreshold,
+		FlushInterval:       ev.FlushInterval,
 	})
 	defer handler.Close()
 
