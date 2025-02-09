@@ -72,14 +72,20 @@ func (q *Queries) FetchSnapshot(ctx context.Context, arg FetchSnapshotParams) (S
 }
 
 const fetchSnapshots = `-- name: FetchSnapshots :many
-SELECT file_id, version, disk_path, created_at, type
-FROM snapshots
-WHERE file_id = ? 
-ORDER BY version ASC
+SELECT s.file_id, s.version, s.disk_path, s.created_at, s.type
+FROM snapshots s
+JOIN files f ON f.id = s.file_id
+WHERE s.file_id = ? AND f.workspace_id = ?
+ORDER BY s.version ASC
 `
 
-func (q *Queries) FetchSnapshots(ctx context.Context, fileID int64) ([]Snapshot, error) {
-	rows, err := q.db.QueryContext(ctx, fetchSnapshots, fileID)
+type FetchSnapshotsParams struct {
+	FileID      int64 `json:"fileId"`
+	WorkspaceID int64 `json:"workspaceId"`
+}
+
+func (q *Queries) FetchSnapshots(ctx context.Context, arg FetchSnapshotsParams) ([]Snapshot, error) {
+	rows, err := q.db.QueryContext(ctx, fetchSnapshots, arg.FileID, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}

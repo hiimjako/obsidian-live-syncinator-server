@@ -142,7 +142,7 @@ func DoRequest[T any](
 			}
 		} else {
 			err = json.Unmarshal(body, &resBody)
-			assert.NoError(t, err)
+			assert.NoError(t, err, "error: "+string(body))
 		}
 	}
 

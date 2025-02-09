@@ -5,7 +5,7 @@ CREATE TABLE snapshots (
   version INTEGER NOT NULL,
   disk_path TEXT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  type TEXT CHECK (pType IN ('file', 'diff')) NOT NULL,
+  type TEXT CHECK (type IN ('file', 'diff')) NOT NULL,
   PRIMARY KEY (file_id, version),
   FOREIGN KEY (file_id) REFERENCES files (id)
 );

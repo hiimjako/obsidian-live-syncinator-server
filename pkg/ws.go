@@ -289,7 +289,12 @@ func (s *syncinator) processFileChanges() {
 
 			if file.pendingChanges > s.minChangesThreshold ||
 				time.Since(file.UpdatedAt) >= s.flushInterval {
-				err := s.writeFileToStorage(file)
+				err := s.CreateFileSnapshot(file)
+				if err != nil {
+					log.Printf("error while creating snapshot: %v", err)
+				}
+
+				err = s.writeFileToStorage(file)
 				if err != nil {
 					log.Println(err)
 				} else {
@@ -391,6 +396,22 @@ func (s *syncinator) writeFileToStorage(file CachedFile) error {
 	}
 
 	return nil
+}
+
+func (s *syncinator) CreateFileSnapshot(file CachedFile) error {
+	diskPath, err := s.storage.CreateObject(strings.NewReader(file.Content))
+	if err != nil {
+		return err
+	}
+
+	err = s.db.CreateSnapshot(s.ctx, repository.CreateSnapshotParams{
+		FileID:   file.ID,
+		Version:  file.Version,
+		DiskPath: diskPath,
+		Type:     "file",
+	})
+
+	return err
 }
 
 func (s *syncinator) addSubscriber(sub *subscriber) {
