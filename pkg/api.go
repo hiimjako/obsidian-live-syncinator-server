@@ -56,7 +56,7 @@ func (s *syncinator) apiHandler() http.Handler {
 	router.HandleFunc("DELETE /file/{id}", s.deleteFileHandler)
 	router.HandleFunc("PATCH /file/{id}", s.updateFileHandler)
 	router.HandleFunc("GET /operation", s.listOperationsHandler)
-	router.HandleFunc("GET /snapshot/{id}", s.listSnapshotsHandler)
+	router.HandleFunc("GET /snapshot/{id}", s.listFileSnapshotsHandler)
 	// router.HandleFunc("POST /snapshot", s.createFileHandler)
 	// router.HandleFunc("GET /snapshot/{id}", s.listOperationsHandler)
 
@@ -136,7 +136,7 @@ func (s *syncinator) listFilesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *syncinator) listSnapshotsHandler(w http.ResponseWriter, r *http.Request) {
+func (s *syncinator) listFileSnapshotsHandler(w http.ResponseWriter, r *http.Request) {
 	fileID, err := strconv.Atoi(r.PathValue("id"))
 
 	if fileID == 0 || err != nil {
