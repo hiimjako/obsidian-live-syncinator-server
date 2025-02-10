@@ -55,7 +55,7 @@ type CachedFile struct {
 type syncinator struct {
 	ctx    context.Context
 	cancel context.CancelFunc
-	mut    sync.RWMutex
+	mut    sync.Mutex
 
 	jwtSecret           []byte
 	maxFileSizeBytes    int64
