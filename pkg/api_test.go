@@ -819,3 +819,94 @@ func Test_listOperationsHandler(t *testing.T) {
 		CreatedAt: body[0].CreatedAt,
 	}, body[0])
 }
+
+// Test_listSnapshotsHandler tests the listSnapshotsHandler using mocked storage
+func Test_listSnapshotsHandler(t *testing.T) {
+	mockFileStorage := new(filestorage.MockFileStorage)
+	db := testutils.CreateDB(t)
+	options := Options{JWTSecret: []byte("secret")}
+	server := New(db, mockFileStorage, options)
+
+	t.Cleanup(func() { server.Close() })
+
+	workspaceID := int64(10)
+	filesToInsert := []struct {
+		file        []byte
+		filepath    string
+		workspaceID int64
+	}{
+		{
+			file:        []byte("here a new file 1!"),
+			filepath:    "/home/file/1",
+			workspaceID: workspaceID,
+		},
+		{
+			file:        []byte("here a new file 2!"),
+			filepath:    "/home/file/2",
+			workspaceID: 123,
+		},
+	}
+
+	for _, f := range filesToInsert {
+		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).Return(f.filepath, nil).Once()
+
+		form, contentType := testutils.CreateMultipart(t, f.filepath, f.file, false)
+		res, file := testutils.DoRequest[repository.File](
+			t,
+			server,
+			http.MethodPost,
+			PathHttpApi+"/file",
+			form,
+			testutils.WithAuthHeader(options.JWTSecret, f.workspaceID),
+			testutils.WithContentTypeHeader(contentType),
+		)
+		require.Equal(t, http.StatusCreated, res.Code)
+
+		err := server.db.CreateSnapshot(server.ctx, repository.CreateSnapshotParams{
+			FileID:   file.ID,
+			Version:  file.Version,
+			DiskPath: "random_path",
+			Type:     "file",
+		})
+		require.NoError(t, err)
+	}
+
+	mockFileStorage.AssertNumberOfCalls(t, "CreateObject", len(filesToInsert))
+
+	t.Run("should fetch snapshot", func(t *testing.T) {
+		res, body := testutils.DoRequest[[]repository.Snapshot](
+			t,
+			server,
+			http.MethodGet,
+			PathHttpApi+"/snapshot/1",
+			nil,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+		)
+		assert.Equal(t, http.StatusOK, res.Code)
+		assert.Len(t, body, 1)
+
+		assert.Equal(t, []repository.Snapshot{
+			{
+				FileID:    1,
+				Version:   0,
+				DiskPath:  "random_path",
+				CreatedAt: body[0].CreatedAt,
+				Type:      "file",
+			},
+		}, body)
+	})
+
+	t.Run("unauthorize to fetch file snapshot of other workspace", func(t *testing.T) {
+		otherWorkspaceID := int64(11)
+		res, body := testutils.DoRequest[[]repository.Snapshot](
+			t,
+			server,
+			http.MethodGet,
+			PathHttpApi+"/snapshot/1",
+			nil,
+			testutils.WithAuthHeader(options.JWTSecret, otherWorkspaceID),
+		)
+		assert.Equal(t, http.StatusOK, res.Code)
+		assert.Len(t, body, 0)
+	})
+}

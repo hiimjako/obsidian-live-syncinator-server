@@ -56,6 +56,9 @@ func (s *syncinator) apiHandler() http.Handler {
 	router.HandleFunc("DELETE /file/{id}", s.deleteFileHandler)
 	router.HandleFunc("PATCH /file/{id}", s.updateFileHandler)
 	router.HandleFunc("GET /operation", s.listOperationsHandler)
+	router.HandleFunc("GET /snapshot/{id}", s.listSnapshotsHandler)
+	// router.HandleFunc("POST /snapshot", s.createFileHandler)
+	// router.HandleFunc("GET /snapshot/{id}", s.listOperationsHandler)
 
 	stack := middleware.CreateStack(
 		middleware.Logging,
@@ -120,6 +123,32 @@ func (s *syncinator) listFilesHandler(w http.ResponseWriter, r *http.Request) {
 	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
 
 	files, err := s.db.FetchFiles(r.Context(), workspaceID)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(files); err != nil {
+		http.Error(w, "error sending request body", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *syncinator) listSnapshotsHandler(w http.ResponseWriter, r *http.Request) {
+	fileID, err := strconv.Atoi(r.PathValue("id"))
+
+	if fileID == 0 || err != nil {
+		http.Error(w, "invalid file id", http.StatusBadRequest)
+		return
+	}
+
+	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	files, err := s.db.FetchSnapshots(r.Context(), repository.FetchSnapshotsParams{
+		FileID:      int64(fileID),
+		WorkspaceID: workspaceID,
+	})
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
