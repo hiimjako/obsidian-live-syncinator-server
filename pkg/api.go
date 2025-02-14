@@ -52,12 +52,11 @@ func (s *syncinator) apiHandler() http.Handler {
 	router.HandleFunc("GET /export", s.exportHandler)
 	router.HandleFunc("GET /file", s.listFilesHandler)
 	router.HandleFunc("GET /file/{id}", s.fetchFileHandler)
+	router.HandleFunc("GET /file/{id}/snapshot", s.listFileSnapshotsHandler)
 	router.HandleFunc("POST /file", s.createFileHandler)
 	router.HandleFunc("DELETE /file/{id}", s.deleteFileHandler)
 	router.HandleFunc("PATCH /file/{id}", s.updateFileHandler)
 	router.HandleFunc("GET /operation", s.listOperationsHandler)
-	router.HandleFunc("GET /snapshot/{id}", s.listFileSnapshotsHandler)
-	// router.HandleFunc("POST /snapshot", s.createFileHandler)
 	// router.HandleFunc("GET /snapshot/{id}", s.listOperationsHandler)
 
 	stack := middleware.CreateStack(

@@ -878,7 +878,7 @@ func Test_listSnapshotsHandler(t *testing.T) {
 			t,
 			server,
 			http.MethodGet,
-			PathHttpApi+"/snapshot/1",
+			PathHttpApi+"/file/1/snapshot",
 			nil,
 			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
 		)
@@ -902,7 +902,7 @@ func Test_listSnapshotsHandler(t *testing.T) {
 			t,
 			server,
 			http.MethodGet,
-			PathHttpApi+"/snapshot/1",
+			PathHttpApi+"/file/1/snapshot",
 			nil,
 			testutils.WithAuthHeader(options.JWTSecret, otherWorkspaceID),
 		)
