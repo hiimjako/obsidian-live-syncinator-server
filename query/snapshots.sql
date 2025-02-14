@@ -1,6 +1,6 @@
 -- name: CreateSnapshot :exec
-INSERT INTO snapshots (file_id, version, disk_path, type)
-VALUES (?, ?, ?, ?);
+INSERT INTO snapshots (file_id, version, disk_path, hash, type)
+VALUES (?, ?, ?, ?, ?);
 
 -- name: FetchSnapshots :many
 SELECT s.*, f.workspace_id

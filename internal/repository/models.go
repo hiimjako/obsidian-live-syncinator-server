@@ -32,6 +32,7 @@ type Snapshot struct {
 	FileID    int64     `json:"fileId"`
 	Version   int64     `json:"version"`
 	DiskPath  string    `json:"diskPath"`
+	Hash      string    `json:"hash"`
 	CreatedAt time.Time `json:"createdAt"`
 	Type      string    `json:"type"`
 }

@@ -11,14 +11,15 @@ import (
 )
 
 const createSnapshot = `-- name: CreateSnapshot :exec
-INSERT INTO snapshots (file_id, version, disk_path, type)
-VALUES (?, ?, ?, ?)
+INSERT INTO snapshots (file_id, version, disk_path, hash, type)
+VALUES (?, ?, ?, ?, ?)
 `
 
 type CreateSnapshotParams struct {
 	FileID   int64  `json:"fileId"`
 	Version  int64  `json:"version"`
 	DiskPath string `json:"diskPath"`
+	Hash     string `json:"hash"`
 	Type     string `json:"type"`
 }
 
@@ -27,6 +28,7 @@ func (q *Queries) CreateSnapshot(ctx context.Context, arg CreateSnapshotParams) 
 		arg.FileID,
 		arg.Version,
 		arg.DiskPath,
+		arg.Hash,
 		arg.Type,
 	)
 	return err
@@ -48,7 +50,7 @@ func (q *Queries) DeleteSnapshot(ctx context.Context, arg DeleteSnapshotParams) 
 }
 
 const fetchSnapshot = `-- name: FetchSnapshot :one
-SELECT s.file_id, s.version, s.disk_path, s.created_at, s.type, f.workspace_id, f.mime_type, f.workspace_path
+SELECT s.file_id, s.version, s.disk_path, s.hash, s.created_at, s.type, f.workspace_id, f.mime_type, f.workspace_path
 FROM snapshots s
 JOIN files f ON f.id = s.file_id
 WHERE s.file_id = ? AND s.version = ? AND f.workspace_id = ?
@@ -65,6 +67,7 @@ type FetchSnapshotRow struct {
 	FileID        int64     `json:"fileId"`
 	Version       int64     `json:"version"`
 	DiskPath      string    `json:"diskPath"`
+	Hash          string    `json:"hash"`
 	CreatedAt     time.Time `json:"createdAt"`
 	Type          string    `json:"type"`
 	WorkspaceID   int64     `json:"workspaceId"`
@@ -79,6 +82,7 @@ func (q *Queries) FetchSnapshot(ctx context.Context, arg FetchSnapshotParams) (F
 		&i.FileID,
 		&i.Version,
 		&i.DiskPath,
+		&i.Hash,
 		&i.CreatedAt,
 		&i.Type,
 		&i.WorkspaceID,
@@ -89,7 +93,7 @@ func (q *Queries) FetchSnapshot(ctx context.Context, arg FetchSnapshotParams) (F
 }
 
 const fetchSnapshots = `-- name: FetchSnapshots :many
-SELECT s.file_id, s.version, s.disk_path, s.created_at, s.type, f.workspace_id
+SELECT s.file_id, s.version, s.disk_path, s.hash, s.created_at, s.type, f.workspace_id
 FROM snapshots s
 JOIN files f ON f.id = s.file_id
 WHERE s.file_id = ? AND f.workspace_id = ?
@@ -105,6 +109,7 @@ type FetchSnapshotsRow struct {
 	FileID      int64     `json:"fileId"`
 	Version     int64     `json:"version"`
 	DiskPath    string    `json:"diskPath"`
+	Hash        string    `json:"hash"`
 	CreatedAt   time.Time `json:"createdAt"`
 	Type        string    `json:"type"`
 	WorkspaceID int64     `json:"workspaceId"`
@@ -123,6 +128,7 @@ func (q *Queries) FetchSnapshots(ctx context.Context, arg FetchSnapshotsParams) 
 			&i.FileID,
 			&i.Version,
 			&i.DiskPath,
+			&i.Hash,
 			&i.CreatedAt,
 			&i.Type,
 			&i.WorkspaceID,

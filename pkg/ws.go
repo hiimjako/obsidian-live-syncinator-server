@@ -399,16 +399,24 @@ func (s *syncinator) writeFileToStorage(file CachedFile) error {
 }
 
 func (s *syncinator) CreateFileSnapshot(file CachedFile) error {
-	diskPath, err := s.storage.CreateObject(strings.NewReader(file.Content))
+	reader := strings.NewReader(file.Content)
+	diskPath, err := s.storage.CreateObject(reader)
 	if err != nil {
 		return err
 	}
+
+	_, err = reader.Seek(0, 0)
+	if err != nil {
+		return err
+	}
+	hash := filestorage.GenerateHash(reader)
 
 	err = s.db.CreateSnapshot(s.ctx, repository.CreateSnapshotParams{
 		FileID:   file.ID,
 		Version:  file.Version,
 		DiskPath: diskPath,
 		Type:     "file",
+		Hash:     hash,
 	})
 
 	return err
