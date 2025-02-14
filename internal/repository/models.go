@@ -28,6 +28,15 @@ type Operation struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type Snapshot struct {
+	FileID    int64     `json:"fileId"`
+	Version   int64     `json:"version"`
+	DiskPath  string    `json:"diskPath"`
+	Hash      string    `json:"hash"`
+	CreatedAt time.Time `json:"createdAt"`
+	Type      string    `json:"type"`
+}
+
 type Workspace struct {
 	ID        int64        `json:"id"`
 	Name      string       `json:"name"`

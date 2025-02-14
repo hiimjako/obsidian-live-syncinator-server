@@ -9,7 +9,7 @@ import (
 type Storage interface {
 	// CreateObject creates an object and returns the path
 	CreateObject(io.Reader) (string, error)
-	// WriteObject overwrites an object, it returns error if the files doesn't exists
+	// WriteObject writes an object, it returns error if the files doesn't exists
 	WriteObject(string, io.Reader) error
 	// DeleteObject deletes an object
 	DeleteObject(string) error

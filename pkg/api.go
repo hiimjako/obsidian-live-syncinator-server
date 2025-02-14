@@ -41,10 +41,11 @@ type Operation struct {
 }
 
 const (
-	ErrDuplicateFile   = "duplicated file"
-	ErrInvalidFile     = "impossible to create file"
-	ErrReadingFile     = "impossible to read file"
-	ErrNotExistingFile = "not existing file"
+	ErrDuplicateFile       = "duplicated file"
+	ErrInvalidFile         = "impossible to create file"
+	ErrReadingFile         = "impossible to read file"
+	ErrNotExistingFile     = "not existing file"
+	ErrNotExistingSnapshot = "not existing snapshot"
 )
 
 func (s *syncinator) apiHandler() http.Handler {
@@ -52,6 +53,8 @@ func (s *syncinator) apiHandler() http.Handler {
 	router.HandleFunc("GET /export", s.exportHandler)
 	router.HandleFunc("GET /file", s.listFilesHandler)
 	router.HandleFunc("GET /file/{id}", s.fetchFileHandler)
+	router.HandleFunc("GET /file/{id}/snapshot", s.listFileSnapshotsHandler)
+	router.HandleFunc("GET /file/{id}/snapshot/{version}", s.fetchSnapshotHandler)
 	router.HandleFunc("POST /file", s.createFileHandler)
 	router.HandleFunc("DELETE /file/{id}", s.deleteFileHandler)
 	router.HandleFunc("PATCH /file/{id}", s.updateFileHandler)
@@ -120,6 +123,32 @@ func (s *syncinator) listFilesHandler(w http.ResponseWriter, r *http.Request) {
 	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
 
 	files, err := s.db.FetchFiles(r.Context(), workspaceID)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(files); err != nil {
+		http.Error(w, "error sending request body", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *syncinator) listFileSnapshotsHandler(w http.ResponseWriter, r *http.Request) {
+	fileID, err := strconv.Atoi(r.PathValue("id"))
+
+	if fileID == 0 || err != nil {
+		http.Error(w, "invalid file id", http.StatusBadRequest)
+		return
+	}
+
+	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	files, err := s.db.FetchSnapshots(r.Context(), repository.FetchSnapshotsParams{
+		FileID:      int64(fileID),
+		WorkspaceID: workspaceID,
+	})
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -253,7 +282,86 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 	if !mimeutils.IsText(file.MimeType) {
 		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
 		defer encoder.Close()
+		writer = encoder
+	}
 
+	_, err = io.Copy(writer, fileContent)
+	if err != nil {
+		http.Error(w, "Error streaming file content", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request) {
+	fileID, err := strconv.Atoi(r.PathValue("id"))
+	if fileID == 0 || err != nil {
+		http.Error(w, "invalid file id", http.StatusBadRequest)
+		return
+	}
+
+	snapshotVersion, err := strconv.Atoi(r.PathValue("version"))
+	if snapshotVersion < 0 || err != nil {
+		http.Error(w, "invalid snapshot version", http.StatusBadRequest)
+		return
+	}
+
+	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	file, err := s.db.FetchSnapshot(r.Context(), repository.FetchSnapshotParams{
+		FileID:      int64(fileID),
+		Version:     int64(snapshotVersion),
+		WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		http.Error(w, ErrNotExistingSnapshot, http.StatusNotFound)
+		return
+	}
+
+	mw := multipart.NewWriter(w)
+	defer mw.Close()
+
+	w.Header().Set("Content-Type", "multipart/mixed; boundary="+mw.Boundary())
+	w.WriteHeader(http.StatusOK)
+
+	metaPart, err := mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type":        []string{"application/json"},
+		"Content-Disposition": []string{fmt.Sprintf("form-data; name=%q", MultipartMetadata)},
+	})
+	if err != nil {
+		http.Error(w, "Error creating metadata part", http.StatusInternalServerError)
+		return
+	}
+	if err := json.NewEncoder(metaPart).Encode(file); err != nil {
+		http.Error(w, "error creating JSON part", http.StatusInternalServerError)
+		return
+	}
+
+	fileContent, err := s.storage.ReadObject(file.DiskPath)
+	if err != nil {
+		http.Error(w, ErrReadingFile, http.StatusInternalServerError)
+		return
+	}
+	defer fileContent.Close()
+
+	filename := path.Base(file.WorkspacePath)
+	mimeHeader := textproto.MIMEHeader{
+		"Content-Type":        []string{file.MimeType},
+		"Content-Disposition": []string{fmt.Sprintf(`form-data; filename=%q`, filename)},
+	}
+	if !mimeutils.IsText(file.MimeType) {
+		mimeHeader["Content-Transfer-Encoding"] = []string{"base64"}
+	}
+
+	filePart, err := mw.CreatePart(mimeHeader)
+	if err != nil {
+		http.Error(w, "Error creating file part", http.StatusInternalServerError)
+		return
+	}
+
+	var writer = filePart
+	// if it is a non text file encode it in base64
+	if !mimeutils.IsText(file.MimeType) {
+		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
+		defer encoder.Close()
 		writer = encoder
 	}
 
@@ -346,14 +454,14 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
-	fileId, err := strconv.Atoi(r.PathValue("id"))
+	fileID, err := strconv.Atoi(r.PathValue("id"))
 
-	if fileId == 0 || err != nil {
+	if fileID == 0 || err != nil {
 		http.Error(w, "invalid file id", http.StatusBadRequest)
 		return
 	}
 
-	file, err := s.db.FetchFile(r.Context(), int64(fileId))
+	file, err := s.db.FetchFile(r.Context(), int64(fileID))
 	if err != nil {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return
@@ -370,10 +478,36 @@ func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = s.db.DeleteFile(r.Context(), int64(fileId))
+	err = s.db.DeleteFile(r.Context(), int64(fileID))
 	if err != nil {
 		http.Error(w, ErrInvalidFile, http.StatusInternalServerError)
 		return
+	}
+
+	snapshots, err := s.db.FetchSnapshots(s.ctx, repository.FetchSnapshotsParams{
+		FileID:      int64(fileID),
+		WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	for _, snapshot := range snapshots {
+		err := s.db.DeleteSnapshot(s.ctx, repository.DeleteSnapshotParams{
+			FileID:  snapshot.FileID,
+			Version: snapshot.Version,
+		})
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		err = s.storage.DeleteObject(snapshot.DiskPath)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent)

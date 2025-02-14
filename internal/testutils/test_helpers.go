@@ -58,11 +58,16 @@ type FileWithContent struct {
 	Content  []byte
 }
 
+type SnapshotWithContent struct {
+	Metadata repository.FetchSnapshotRow
+	Content  []byte
+}
+
 func DoRequest[T any](
 	t *testing.T,
 	server http.Handler,
 	method string,
-	filepath string,
+	url string,
 	input any,
 	options ...requestOption,
 ) (*httptest.ResponseRecorder, T) {
@@ -76,7 +81,7 @@ func DoRequest[T any](
 		reqBody = bytes.NewBuffer(reqBodyBytes)
 	}
 
-	req := httptest.NewRequest(method, filepath, reqBody)
+	req := httptest.NewRequest(method, url, reqBody)
 	for _, opt := range options {
 		require.NoError(t, opt(req))
 	}
@@ -90,7 +95,49 @@ func DoRequest[T any](
 	require.NoError(t, err)
 
 	contentType := res.Header().Get("Content-Type")
-	if strings.HasPrefix(contentType, "multipart/mixed") {
+	if strings.HasPrefix(contentType, "multipart/mixed") && strings.Contains(url, "snapshot") {
+		// Parse multipart/mixed response
+		boundary := contentType[len("multipart/mixed; boundary="):]
+		reader := multipart.NewReader(bytes.NewReader(body), boundary)
+
+		// Decode multipart parts into SnapshotWithContent
+		var snapshotWithContent SnapshotWithContent
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+
+			contentType := part.Header.Get("Content-Type")
+			contentTranseferEncoding := part.Header.Get("Content-Transfer-Encoding")
+
+			switch contentType {
+			case "application/json":
+				partBody, err := io.ReadAll(part)
+				require.NoError(t, err)
+				err = json.Unmarshal(partBody, &snapshotWithContent.Metadata)
+				require.NoError(t, err)
+			default:
+				var partBody []byte
+				if contentTranseferEncoding == "base64" {
+					decoder := base64.NewDecoder(base64.StdEncoding, part)
+					partBody, err = io.ReadAll(decoder)
+					require.NoError(t, err)
+				} else {
+					partBody, err = io.ReadAll(part)
+					require.NoError(t, err)
+				}
+				snapshotWithContent.Content = partBody
+			}
+		}
+
+		if result, ok := any(&resBody).(*SnapshotWithContent); ok {
+			*result = snapshotWithContent
+		} else {
+			require.Fail(t, "Unsupported type for multipart/mixed response decoding")
+		}
+	} else if strings.HasPrefix(contentType, "multipart/mixed") {
 		// Parse multipart/mixed response
 		boundary := contentType[len("multipart/mixed; boundary="):]
 		reader := multipart.NewReader(bytes.NewReader(body), boundary)
@@ -142,7 +189,7 @@ func DoRequest[T any](
 			}
 		} else {
 			err = json.Unmarshal(body, &resBody)
-			assert.NoError(t, err)
+			assert.NoError(t, err, "error: "+string(body))
 		}
 	}
 

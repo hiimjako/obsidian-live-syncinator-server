@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"net/http/httptest"
+	"os"
+	"path"
 	"strings"
 	"sync"
 	"testing"
@@ -194,12 +196,12 @@ func Test_handleChunk(t *testing.T) {
 		updatedFile, err := handler.db.FetchFile(context.Background(), file.ID)
 		assert.NoError(t, err)
 
-		handler.mut.RLock()
+		handler.mut.Lock()
 		assert.Equal(t, int64(1), handler.files[file.ID].Version)
 		assert.Equal(t, int64(1), updatedFile.Version)
 		assert.Greater(t, updatedFile.UpdatedAt, file.UpdatedAt)
 		assert.Equal(t, "334d016f755cd6dc58c53a86e183882f8ec14f52fb05345887c8a5edd42c87b7", updatedFile.Hash)
-		handler.mut.RUnlock()
+		handler.mut.Unlock()
 
 		// check operation history
 		operations, err := handler.db.FetchFileOperationsFromVersion(
@@ -542,6 +544,203 @@ func Test_handleEvent(t *testing.T) {
 		reciverWorkspace2.Close(websocket.StatusNormalClosure, "")
 		ts.Close()
 		handler.Close()
+	})
+}
+
+func Test_processFileChanges(t *testing.T) {
+	t.Run("should not write file to storage and save snapshot if too early", func(t *testing.T) {
+		db := testutils.CreateDB(t)
+		fs := filestorage.NewDisk(t.TempDir())
+		opts := Options{
+			JWTSecret:           []byte("secret"),
+			FlushInterval:       500 * time.Millisecond,
+			MinChangesThreshold: 2,
+		}
+		// processFileChanges is already running. Started in New()
+		handler := New(db, fs, opts)
+
+		handler.mut.Lock()
+		handler.files[1] = CachedFile{
+			pendingChanges: 1,
+			Content:        "foo",
+			File: repository.File{
+				ID:          1,
+				Version:     1,
+				DiskPath:    "file.md",
+				WorkspaceID: 1,
+				UpdatedAt:   time.Now(),
+			},
+		}
+		handler.mut.Unlock()
+
+		time.Sleep(200 * time.Millisecond)
+
+		_, err := fs.ReadObject("file.md")
+		assert.Error(t, err)
+
+		_, err = handler.db.FetchSnapshot(handler.ctx, repository.FetchSnapshotParams{
+			FileID:  1,
+			Version: 1,
+		})
+		assert.Error(t, err)
+	})
+
+	t.Run("should write file to storage and save snapshot after x changes", func(t *testing.T) {
+		dir := t.TempDir()
+
+		db := testutils.CreateDB(t)
+		fs := filestorage.NewDisk(dir)
+		opts := Options{
+			JWTSecret:           []byte("secret"),
+			FlushInterval:       100 * time.Millisecond,
+			MinChangesThreshold: 2,
+		}
+		// processFileChanges is already running. Started in New()
+		handler := New(db, fs, opts)
+
+		filename := "file.md"
+
+		_, err := os.Create(path.Join(dir, filename))
+		require.NoError(t, err)
+
+		_, err = handler.db.CreateFile(handler.ctx, repository.CreateFileParams{
+			WorkspaceID:   1,
+			WorkspacePath: "path",
+			MimeType:      "mime",
+		})
+		require.NoError(t, err)
+
+		handler.mut.Lock()
+		handler.files[1] = CachedFile{
+			pendingChanges: 3,
+			Content:        "foo",
+			File: repository.File{
+				ID:          1,
+				Version:     1,
+				DiskPath:    filename,
+				WorkspaceID: 1,
+				UpdatedAt:   time.Now().Add(1 * time.Hour),
+			},
+		}
+		handler.mut.Unlock()
+		time.Sleep(2 * opts.FlushInterval)
+
+		// check file write
+		fileReader, err := fs.ReadObject(filename)
+		assert.NoError(t, err)
+		defer fileReader.Close()
+		fileContent, err := io.ReadAll(fileReader)
+		assert.NoError(t, err)
+		assert.Equal(t, "foo", string(fileContent))
+
+		// check snapshot
+		s, err := handler.db.FetchSnapshot(handler.ctx, repository.FetchSnapshotParams{
+			FileID:      1,
+			Version:     1,
+			WorkspaceID: 1,
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, repository.FetchSnapshotRow{
+			FileID:        1,
+			Version:       1,
+			DiskPath:      s.DiskPath,
+			CreatedAt:     s.CreatedAt,
+			Type:          "file",
+			WorkspaceID:   1,
+			WorkspacePath: "path",
+			MimeType:      "mime",
+			Hash:          "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+		}, s)
+
+		sFileReader, err := fs.ReadObject(s.DiskPath)
+		assert.NoError(t, err)
+		defer sFileReader.Close()
+		sFileContent, err := io.ReadAll(sFileReader)
+		assert.NoError(t, err)
+		assert.Equal(t, "foo", string(sFileContent))
+
+		handler.mut.Lock()
+		assert.EqualValues(t, 0, handler.files[1].pendingChanges)
+		handler.mut.Unlock()
+	})
+
+	t.Run("should write file to storage and save snapshot after time elapsed", func(t *testing.T) {
+		dir := t.TempDir()
+
+		db := testutils.CreateDB(t)
+		fs := filestorage.NewDisk(dir)
+		opts := Options{
+			JWTSecret:           []byte("secret"),
+			FlushInterval:       100 * time.Millisecond,
+			MinChangesThreshold: 2,
+		}
+		// processFileChanges is already running. Started in New()
+		handler := New(db, fs, opts)
+
+		filename := "file.md"
+
+		_, err := os.Create(path.Join(dir, filename))
+		require.NoError(t, err)
+
+		_, err = handler.db.CreateFile(handler.ctx, repository.CreateFileParams{
+			WorkspaceID:   1,
+			WorkspacePath: "path",
+			MimeType:      "mime",
+		})
+		require.NoError(t, err)
+
+		handler.mut.Lock()
+		handler.files[1] = CachedFile{
+			pendingChanges: 1,
+			Content:        "foo",
+			File: repository.File{
+				ID:          1,
+				Version:     1,
+				DiskPath:    filename,
+				WorkspaceID: 1,
+				UpdatedAt:   time.Now().Add(-1 * time.Hour),
+			},
+		}
+		handler.mut.Unlock()
+		time.Sleep(2 * opts.FlushInterval)
+
+		// check file write
+		fileReader, err := fs.ReadObject(filename)
+		assert.NoError(t, err)
+		defer fileReader.Close()
+		fileContent, err := io.ReadAll(fileReader)
+		assert.NoError(t, err)
+		assert.Equal(t, "foo", string(fileContent))
+
+		// check snapshot
+		s, err := handler.db.FetchSnapshot(handler.ctx, repository.FetchSnapshotParams{
+			FileID:      1,
+			Version:     1,
+			WorkspaceID: 1,
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, repository.FetchSnapshotRow{
+			FileID:        1,
+			Version:       1,
+			DiskPath:      s.DiskPath,
+			CreatedAt:     s.CreatedAt,
+			Type:          "file",
+			WorkspaceID:   1,
+			WorkspacePath: "path",
+			MimeType:      "mime",
+			Hash:          "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+		}, s)
+
+		sFileReader, err := fs.ReadObject(s.DiskPath)
+		assert.NoError(t, err)
+		defer sFileReader.Close()
+		sFileContent, err := io.ReadAll(sFileReader)
+		assert.NoError(t, err)
+		assert.Equal(t, "foo", string(sFileContent))
+
+		handler.mut.Lock()
+		assert.EqualValues(t, 0, handler.files[1].pendingChanges)
+		handler.mut.Unlock()
 	})
 }
 
