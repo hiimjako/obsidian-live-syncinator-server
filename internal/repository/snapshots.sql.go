@@ -7,6 +7,7 @@ package repository
 
 import (
 	"context"
+	"time"
 )
 
 const createSnapshot = `-- name: CreateSnapshot :exec
@@ -47,32 +48,48 @@ func (q *Queries) DeleteSnapshot(ctx context.Context, arg DeleteSnapshotParams) 
 }
 
 const fetchSnapshot = `-- name: FetchSnapshot :one
-SELECT file_id, version, disk_path, created_at, type
-FROM snapshots
-WHERE file_id = ? AND version = ?
+SELECT s.file_id, s.version, s.disk_path, s.created_at, s.type, f.workspace_id, f.mime_type, f.workspace_path
+FROM snapshots s
+JOIN files f ON f.id = s.file_id
+WHERE s.file_id = ? AND s.version = ? AND f.workspace_id = ?
 LIMIT 1
 `
 
 type FetchSnapshotParams struct {
-	FileID  int64 `json:"fileId"`
-	Version int64 `json:"version"`
+	FileID      int64 `json:"fileId"`
+	Version     int64 `json:"version"`
+	WorkspaceID int64 `json:"workspaceId"`
 }
 
-func (q *Queries) FetchSnapshot(ctx context.Context, arg FetchSnapshotParams) (Snapshot, error) {
-	row := q.db.QueryRowContext(ctx, fetchSnapshot, arg.FileID, arg.Version)
-	var i Snapshot
+type FetchSnapshotRow struct {
+	FileID        int64     `json:"fileId"`
+	Version       int64     `json:"version"`
+	DiskPath      string    `json:"diskPath"`
+	CreatedAt     time.Time `json:"createdAt"`
+	Type          string    `json:"type"`
+	WorkspaceID   int64     `json:"workspaceId"`
+	MimeType      string    `json:"mimeType"`
+	WorkspacePath string    `json:"workspacePath"`
+}
+
+func (q *Queries) FetchSnapshot(ctx context.Context, arg FetchSnapshotParams) (FetchSnapshotRow, error) {
+	row := q.db.QueryRowContext(ctx, fetchSnapshot, arg.FileID, arg.Version, arg.WorkspaceID)
+	var i FetchSnapshotRow
 	err := row.Scan(
 		&i.FileID,
 		&i.Version,
 		&i.DiskPath,
 		&i.CreatedAt,
 		&i.Type,
+		&i.WorkspaceID,
+		&i.MimeType,
+		&i.WorkspacePath,
 	)
 	return i, err
 }
 
 const fetchSnapshots = `-- name: FetchSnapshots :many
-SELECT s.file_id, s.version, s.disk_path, s.created_at, s.type
+SELECT s.file_id, s.version, s.disk_path, s.created_at, s.type, f.workspace_id
 FROM snapshots s
 JOIN files f ON f.id = s.file_id
 WHERE s.file_id = ? AND f.workspace_id = ?
@@ -84,21 +101,31 @@ type FetchSnapshotsParams struct {
 	WorkspaceID int64 `json:"workspaceId"`
 }
 
-func (q *Queries) FetchSnapshots(ctx context.Context, arg FetchSnapshotsParams) ([]Snapshot, error) {
+type FetchSnapshotsRow struct {
+	FileID      int64     `json:"fileId"`
+	Version     int64     `json:"version"`
+	DiskPath    string    `json:"diskPath"`
+	CreatedAt   time.Time `json:"createdAt"`
+	Type        string    `json:"type"`
+	WorkspaceID int64     `json:"workspaceId"`
+}
+
+func (q *Queries) FetchSnapshots(ctx context.Context, arg FetchSnapshotsParams) ([]FetchSnapshotsRow, error) {
 	rows, err := q.db.QueryContext(ctx, fetchSnapshots, arg.FileID, arg.WorkspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Snapshot
+	var items []FetchSnapshotsRow
 	for rows.Next() {
-		var i Snapshot
+		var i FetchSnapshotsRow
 		if err := rows.Scan(
 			&i.FileID,
 			&i.Version,
 			&i.DiskPath,
 			&i.CreatedAt,
 			&i.Type,
+			&i.WorkspaceID,
 		); err != nil {
 			return nil, err
 		}

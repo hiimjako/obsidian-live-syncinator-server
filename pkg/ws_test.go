@@ -603,6 +603,13 @@ func Test_processFileChanges(t *testing.T) {
 		_, err := os.Create(path.Join(dir, filename))
 		require.NoError(t, err)
 
+		_, err = handler.db.CreateFile(handler.ctx, repository.CreateFileParams{
+			WorkspaceID:   1,
+			WorkspacePath: "path",
+			MimeType:      "mime",
+		})
+		require.NoError(t, err)
+
 		handler.mut.Lock()
 		handler.files[1] = CachedFile{
 			pendingChanges: 3,
@@ -628,16 +635,20 @@ func Test_processFileChanges(t *testing.T) {
 
 		// check snapshot
 		s, err := handler.db.FetchSnapshot(handler.ctx, repository.FetchSnapshotParams{
-			FileID:  1,
-			Version: 1,
+			FileID:      1,
+			Version:     1,
+			WorkspaceID: 1,
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, repository.Snapshot{
-			FileID:    1,
-			Version:   1,
-			DiskPath:  s.DiskPath,
-			CreatedAt: s.CreatedAt,
-			Type:      "file",
+		assert.Equal(t, repository.FetchSnapshotRow{
+			FileID:        1,
+			Version:       1,
+			DiskPath:      s.DiskPath,
+			CreatedAt:     s.CreatedAt,
+			Type:          "file",
+			WorkspaceID:   1,
+			WorkspacePath: "path",
+			MimeType:      "mime",
 		}, s)
 
 		sFileReader, err := fs.ReadObject(s.DiskPath)
@@ -670,6 +681,13 @@ func Test_processFileChanges(t *testing.T) {
 		_, err := os.Create(path.Join(dir, filename))
 		require.NoError(t, err)
 
+		_, err = handler.db.CreateFile(handler.ctx, repository.CreateFileParams{
+			WorkspaceID:   1,
+			WorkspacePath: "path",
+			MimeType:      "mime",
+		})
+		require.NoError(t, err)
+
 		handler.mut.Lock()
 		handler.files[1] = CachedFile{
 			pendingChanges: 1,
@@ -695,16 +713,20 @@ func Test_processFileChanges(t *testing.T) {
 
 		// check snapshot
 		s, err := handler.db.FetchSnapshot(handler.ctx, repository.FetchSnapshotParams{
-			FileID:  1,
-			Version: 1,
+			FileID:      1,
+			Version:     1,
+			WorkspaceID: 1,
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, repository.Snapshot{
-			FileID:    1,
-			Version:   1,
-			DiskPath:  s.DiskPath,
-			CreatedAt: s.CreatedAt,
-			Type:      "file",
+		assert.Equal(t, repository.FetchSnapshotRow{
+			FileID:        1,
+			Version:       1,
+			DiskPath:      s.DiskPath,
+			CreatedAt:     s.CreatedAt,
+			Type:          "file",
+			WorkspaceID:   1,
+			WorkspacePath: "path",
+			MimeType:      "mime",
 		}, s)
 
 		sFileReader, err := fs.ReadObject(s.DiskPath)

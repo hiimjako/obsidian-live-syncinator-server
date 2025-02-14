@@ -507,14 +507,14 @@ func Test_createFileHandler(t *testing.T) {
 
 // Test_deleteFileHandler tests the deleteFileHandler using mocked storage
 func Test_deleteFileHandler(t *testing.T) {
-	mockFileStorage := new(filestorage.MockFileStorage)
-	db := testutils.CreateDB(t)
-	options := Options{JWTSecret: []byte("secret")}
-	server := New(db, mockFileStorage, options)
-
-	t.Cleanup(func() { server.Close() })
-
 	t.Run("successfully delete a file", func(t *testing.T) {
+		mockFileStorage := new(filestorage.MockFileStorage)
+		db := testutils.CreateDB(t)
+		options := Options{JWTSecret: []byte("secret")}
+		server := New(db, mockFileStorage, options)
+
+		t.Cleanup(func() { server.Close() })
+
 		var workspaceID int64 = 10
 		filepath := "/home/file"
 		content := []byte("here a new file!")
@@ -560,7 +560,92 @@ func Test_deleteFileHandler(t *testing.T) {
 		mockFileStorage.AssertCalled(t, "DeleteObject", diskPath)
 	})
 
+	t.Run("successfully delete a file and related snapshots", func(t *testing.T) {
+		mockFileStorage := new(filestorage.MockFileStorage)
+		db := testutils.CreateDB(t)
+		options := Options{JWTSecret: []byte("secret")}
+		server := New(db, mockFileStorage, options)
+
+		t.Cleanup(func() { server.Close() })
+
+		var workspaceID int64 = 10
+		filepath := "/home/file"
+		content := []byte("here a new file!")
+		diskPath := "/foo/bar"
+
+		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
+			Return(diskPath, nil).
+			Once()
+
+		// creating file
+		form, contentType := testutils.CreateMultipart(t, filepath, content, false)
+		res, createBody := testutils.DoRequest[repository.File](
+			t,
+			server,
+			http.MethodPost,
+			PathHttpApi+"/file",
+			form,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+			testutils.WithContentTypeHeader(contentType),
+		)
+		assert.Equal(t, http.StatusCreated, res.Code)
+
+		snapshotPath := "/foo/bar"
+		mockFileStorage.On("CreateObject", mock.AnythingOfType("*strings.Reader")).
+			Return(snapshotPath, nil).
+			Once()
+		// create snapshot
+		snapshotContent := "snapshot_content"
+		_, err := server.storage.CreateObject(strings.NewReader(snapshotContent))
+		require.NoError(t, err)
+		err = server.db.CreateSnapshot(server.ctx, repository.CreateSnapshotParams{
+			FileID:   createBody.ID,
+			Version:  createBody.Version,
+			DiskPath: diskPath,
+			Type:     "file",
+		})
+		require.NoError(t, err)
+
+		mockFileStorage.On("DeleteObject", diskPath).Return(nil).Once()
+		mockFileStorage.On("DeleteObject", snapshotPath).Return(nil).Once()
+
+		// deleting a file
+		res, deleteBody := testutils.DoRequest[string](
+			t,
+			server,
+			http.MethodDelete,
+			PathHttpApi+"/file/"+strconv.Itoa(int(createBody.ID)),
+			nil,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+		)
+		assert.Equal(t, http.StatusNoContent, res.Code)
+		assert.Equal(t, "", deleteBody)
+
+		// check db
+		files, err := server.db.FetchWorkspaceFiles(context.Background(), workspaceID)
+		assert.NoError(t, err)
+		assert.Len(t, files, 0)
+
+		snapshots, err := server.db.FetchSnapshots(context.Background(), repository.FetchSnapshotsParams{
+			FileID:      createBody.ID,
+			WorkspaceID: createBody.WorkspaceID,
+		})
+		assert.NoError(t, err)
+		assert.Len(t, snapshots, 0)
+
+		// check mock assertions
+		mockFileStorage.AssertNumberOfCalls(t, "CreateObject", 2)
+		mockFileStorage.AssertCalled(t, "DeleteObject", diskPath)
+	})
+
 	t.Run("unauthorize to delete a file of other workspace", func(t *testing.T) {
+		mockFileStorage := new(filestorage.MockFileStorage)
+		db := testutils.CreateDB(t)
+		options := Options{JWTSecret: []byte("secret")}
+		server := New(db, mockFileStorage, options)
+
+		t.Cleanup(func() { server.Close() })
+
 		var workspaceID int64 = 10
 		filepath := "/home/file/2"
 		content := []byte("here a new file!")
@@ -909,4 +994,92 @@ func Test_listSnapshotsHandler(t *testing.T) {
 		assert.Equal(t, http.StatusOK, res.Code)
 		assert.Len(t, body, 0)
 	})
+}
+
+func Test_fetchSnapshotHandler(t *testing.T) {
+	fs := filestorage.NewDisk(t.TempDir())
+	db := testutils.CreateDB(t)
+	options := Options{JWTSecret: []byte("secret")}
+	server := New(db, fs, options)
+
+	t.Cleanup(func() { server.Close() })
+
+	workspaceID := int64(10)
+	filesToInsert := []struct {
+		file        []byte
+		filepath    string
+		workspaceID int64
+	}{
+		{
+			file:        []byte("here a new file 1!"),
+			filepath:    "/home/file/1",
+			workspaceID: workspaceID,
+		},
+		{
+			file:        []byte("here a new file 2!"),
+			filepath:    "/home/file/2",
+			workspaceID: 123,
+		},
+	}
+
+	diskPaths := []string{}
+	for _, f := range filesToInsert {
+		form, contentType := testutils.CreateMultipart(t, f.filepath, f.file, false)
+		res, file := testutils.DoRequest[repository.File](
+			t,
+			server,
+			http.MethodPost,
+			PathHttpApi+"/file",
+			form,
+			testutils.WithAuthHeader(options.JWTSecret, f.workspaceID),
+			testutils.WithContentTypeHeader(contentType),
+		)
+		require.Equal(t, http.StatusCreated, res.Code)
+
+		diskPath, err := server.storage.CreateObject(strings.NewReader("foo_" + strconv.Itoa(int(file.ID))))
+		diskPaths = append(diskPaths, diskPath)
+		require.NoError(t, err)
+		err = server.db.CreateSnapshot(server.ctx, repository.CreateSnapshotParams{
+			FileID:   file.ID,
+			Version:  file.Version,
+			DiskPath: diskPath,
+			Type:     "file",
+		})
+		require.NoError(t, err)
+	}
+
+	// snapshot of other workspace
+	res, _ := testutils.DoRequest[string](
+		t,
+		server,
+		http.MethodGet,
+		PathHttpApi+"/file/2/snapshot/0",
+		nil,
+		testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+	)
+	assert.Equal(t, http.StatusNotFound, res.Code)
+
+	// fetch snapshot
+	res, body := testutils.DoRequest[testutils.SnapshotWithContent](
+		t,
+		server,
+		http.MethodGet,
+		PathHttpApi+"/file/1/snapshot/0",
+		nil,
+		testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+	)
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Equal(t, testutils.SnapshotWithContent{
+		Metadata: repository.FetchSnapshotRow{
+			FileID:        1,
+			Version:       0,
+			DiskPath:      diskPaths[0],
+			CreatedAt:     body.Metadata.CreatedAt,
+			Type:          "file",
+			WorkspaceID:   10,
+			MimeType:      "text/plain; charset=utf-8",
+			WorkspacePath: "/home/file/1",
+		},
+		Content: []byte("foo_1"),
+	}, body)
 }
