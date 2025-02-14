@@ -20,7 +20,7 @@ type EnvVariables struct {
 	CacheMaxAge         time.Duration `env:"CACHE_MAX_AGE,default=1h"`
 	FlushInterval       time.Duration `env:"FLUSH_INTERVAL,default=1m"`
 	MaxFileSizeMB       int64         `env:"MAX_FILE_SIZE,default=1024"`
-	MinChangesThreshold int64         `env:"MIN_CHANGES_THRESHOLD,default=3"`
+	MinChangesThreshold int64         `env:"MIN_CHANGES_THRESHOLD,default=5"`
 }
 
 func LoadEnv(paths ...string) *EnvVariables {
