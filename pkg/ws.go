@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -282,13 +283,17 @@ func (s *syncinator) processFileChanges() {
 
 	f := func() {
 		s.mut.Lock()
+		wg := sync.WaitGroup{}
 		for fileID, file := range s.files {
-			if file.pendingChanges <= 0 {
+			if file.pendingChanges <= 0 ||
+				(file.pendingChanges <= s.minChangesThreshold &&
+					time.Since(file.UpdatedAt) < s.flushInterval) {
 				continue
 			}
 
-			if file.pendingChanges > s.minChangesThreshold ||
-				time.Since(file.UpdatedAt) >= s.flushInterval {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
 				err := s.CreateFileSnapshot(file)
 				if err != nil {
 					log.Printf("error while creating snapshot: %v", err)
@@ -301,8 +306,9 @@ func (s *syncinator) processFileChanges() {
 					file.pendingChanges = 0
 					s.files[fileID] = file
 				}
-			}
+			}()
 		}
+		wg.Wait()
 		s.mut.Unlock()
 	}
 
@@ -333,15 +339,21 @@ func (s *syncinator) purgeCache() {
 
 			// removing items from files
 			s.mut.Lock()
+			wg := sync.WaitGroup{}
 			for key, file := range s.files {
 				if time.Since(file.UpdatedAt) >= s.cacheMaxAge {
-					err := s.writeFileToStorage(file)
-					if err != nil {
-						log.Printf("error while writing file %d before purge: %v\n", file.ID, err)
-					}
-					delete(s.files, key)
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						err := s.writeFileToStorage(file)
+						if err != nil {
+							log.Printf("error while writing file %d before purge: %v\n", file.ID, err)
+						}
+						delete(s.files, key)
+					}()
 				}
 			}
+			wg.Wait()
 			s.mut.Unlock()
 
 		case <-s.ctx.Done():
