@@ -359,10 +359,6 @@ func (s *syncinator) WriteFileToStorage(fileID int64) error {
 		return nil
 	}
 
-	if file.pendingChanges <= 0 {
-		return nil
-	}
-
 	err := s.writeFileToStorage(file)
 	if err != nil {
 		return err
@@ -379,13 +375,17 @@ func (s *syncinator) writeFileToStorage(file CachedFile) error {
 		return nil
 	}
 
-	err := s.storage.WriteObject(file.DiskPath, strings.NewReader(file.Content))
+	reader := strings.NewReader(file.Content)
+	err := s.storage.WriteObject(file.DiskPath, reader)
 	if err != nil {
 		return err
 	}
 
-	fileReader := strings.NewReader(file.Content)
-	hash := filestorage.GenerateHash(fileReader)
+	_, err = reader.Seek(0, 0)
+	if err != nil {
+		return err
+	}
+	hash := filestorage.GenerateHash(reader)
 
 	err = s.db.UpdateFileHash(s.ctx, repository.UpdateFileHashParams{
 		ID:   file.ID,
