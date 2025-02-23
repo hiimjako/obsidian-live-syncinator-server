@@ -227,13 +227,13 @@ func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
 		return
 	}
 
-	s.subscribersMu.Lock()
-	defer s.subscribersMu.Unlock()
-
 	err := s.publishLimiter.Wait(context.Background())
 	if err != nil {
 		log.Println(err)
 	}
+
+	s.subscribersMu.Lock()
+	defer s.subscribersMu.Unlock()
 
 	for sub := range s.subscribers {
 		// delete dead connections
