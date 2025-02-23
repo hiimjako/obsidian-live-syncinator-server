@@ -119,11 +119,11 @@ func Test_handleChunk(t *testing.T) {
 		require.NoError(t, err)
 
 		//nolint:bodyclose
-		reciverWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
+		receiverWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
 		require.NoError(t, err)
 
 		//nolint:bodyclose
-		reciverWorkspace2, _, err := websocket.Dial(ctx, urlWorkspace2, nil)
+		receiverWorkspace2, _, err := websocket.Dial(ctx, urlWorkspace2, nil)
 		require.NoError(t, err)
 
 		// add time to update updatedAt
@@ -148,10 +148,10 @@ func Test_handleChunk(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(3)
 
-		// check that only ws on same workspace recive the event
+		// check that only ws on same workspace receive the event
 
 		go func() {
-			// the sender should recive the message message
+			// the sender should receive the message message
 			var recMsg ChunkMessage
 			err := wsjson.Read(ctx, senderWorkspace1, &recMsg)
 			assert.NoError(t, err)
@@ -165,10 +165,10 @@ func Test_handleChunk(t *testing.T) {
 		}()
 
 		go func() {
-			// the reciver on other workspace should not recive any message
+			// the receiver on other workspace should not receive any message
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			var recMsg ChunkMessage
-			err := wsjson.Read(ctx, reciverWorkspace2, &recMsg)
+			err := wsjson.Read(ctx, receiverWorkspace2, &recMsg)
 			assert.Error(t, err)
 			cancel()
 
@@ -176,9 +176,9 @@ func Test_handleChunk(t *testing.T) {
 		}()
 
 		go func() {
-			// the reciver on the same workspace should recive the message
+			// the receiver on the same workspace should receive the message
 			var recMsg ChunkMessage
-			err := wsjson.Read(ctx, reciverWorkspace1, &recMsg)
+			err := wsjson.Read(ctx, receiverWorkspace1, &recMsg)
 			assert.NoError(t, err)
 
 			// only version should differ
@@ -225,8 +225,8 @@ func Test_handleChunk(t *testing.T) {
 		t.Cleanup(func() {
 			cancel()
 			senderWorkspace1.Close(websocket.StatusNormalClosure, "")
-			reciverWorkspace1.Close(websocket.StatusNormalClosure, "")
-			reciverWorkspace2.Close(websocket.StatusNormalClosure, "")
+			receiverWorkspace1.Close(websocket.StatusNormalClosure, "")
+			receiverWorkspace2.Close(websocket.StatusNormalClosure, "")
 			ts.Close()
 			handler.Close()
 		})
@@ -309,7 +309,7 @@ func Test_handleChunk(t *testing.T) {
 		wg.Add(2)
 
 		go func() {
-			// the client1 should recive the first message
+			// the client1 should receive the first message
 			var recMsg ChunkMessage
 			err := wsjson.Read(ctx, client1, &recMsg)
 			assert.NoError(t, err)
@@ -329,7 +329,7 @@ func Test_handleChunk(t *testing.T) {
 				},
 			}, recMsg)
 
-			// the client1 should recive the transformed chunk of client2
+			// the client1 should receive the transformed chunk of client2
 			var recMsg2 ChunkMessage
 			err = wsjson.Read(ctx, client1, &recMsg2)
 			assert.NoError(t, err)
@@ -354,7 +354,7 @@ func Test_handleChunk(t *testing.T) {
 		}()
 
 		go func() {
-			// the client2 should recive the first message of client1
+			// the client2 should receive the first message of client1
 			var recMsg ChunkMessage
 			err := wsjson.Read(ctx, client2, &recMsg)
 			assert.NoError(t, err)
@@ -485,11 +485,11 @@ func Test_handleEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	//nolint:bodyclose
-	reciverWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
+	receiverWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
 	require.NoError(t, err)
 
 	//nolint:bodyclose
-	reciverWorkspace2, _, err := websocket.Dial(ctx, urlWorkspace2, nil)
+	receiverWorkspace2, _, err := websocket.Dial(ctx, urlWorkspace2, nil)
 	require.NoError(t, err)
 
 	msg := EventMessage{
@@ -503,10 +503,10 @@ func Test_handleEvent(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(3)
 
-	// check that only ws on same workspace recive the event
+	// check that only ws on same workspace receive the event
 
 	go func() {
-		// the sender should not recive any message
+		// the sender should not receive any message
 		var recMsg EventMessage
 		err := wsjson.Read(ctx, senderWorkspace1, &recMsg)
 		assert.Error(t, err)
@@ -515,18 +515,18 @@ func Test_handleEvent(t *testing.T) {
 	}()
 
 	go func() {
-		// the reciver on other workspace should not recive any message
+		// the receiver on other workspace should not receive any message
 		var recMsg EventMessage
-		err := wsjson.Read(ctx, reciverWorkspace2, &recMsg)
+		err := wsjson.Read(ctx, receiverWorkspace2, &recMsg)
 		assert.Error(t, err)
 
 		wg.Done()
 	}()
 
 	go func() {
-		// the reciver on the same workspace should recive the message
+		// the receiver on the same workspace should receive the message
 		var recMsg EventMessage
-		err := wsjson.Read(ctx, reciverWorkspace1, &recMsg)
+		err := wsjson.Read(ctx, receiverWorkspace1, &recMsg)
 		assert.NoError(t, err)
 		assert.Equal(t, msg, recMsg)
 
@@ -540,8 +540,8 @@ func Test_handleEvent(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		senderWorkspace1.Close(websocket.StatusNormalClosure, "")
-		reciverWorkspace1.Close(websocket.StatusNormalClosure, "")
-		reciverWorkspace2.Close(websocket.StatusNormalClosure, "")
+		receiverWorkspace1.Close(websocket.StatusNormalClosure, "")
+		receiverWorkspace2.Close(websocket.StatusNormalClosure, "")
 		ts.Close()
 		handler.Close()
 	})
