@@ -14,6 +14,7 @@ require (
 	github.com/sethvargo/go-envconfig v1.1.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.33.0
+	golang.org/x/exp v0.0.0-20240325151524-a685a6edb6d8
 	golang.org/x/time v0.10.0
 )
 
