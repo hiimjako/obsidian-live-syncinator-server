@@ -190,8 +190,10 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		if committed {
 			s.files[data.FileID] = file
 		} else {
-			//nolint
-			tx.Rollback()
+			err := tx.Rollback()
+			if err != nil {
+				log.Printf("error rollbacking transaction. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
+			}
 		}
 	}()
 
