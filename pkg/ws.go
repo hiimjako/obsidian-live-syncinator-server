@@ -100,8 +100,8 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 
 	s.mut.Lock()
 	defer s.mut.Unlock()
-
 	file, ok := s.files[data.FileID]
+
 	if !ok {
 		err := s.loadFileInCache(data.FileID)
 		if err != nil {
@@ -109,6 +109,13 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 			return
 		}
 		file = s.files[data.FileID]
+	}
+
+	for _, chunk := range data.Chunks {
+		if chunk.Position < 0 || chunk.Position > int64(len(file.Content)) {
+			log.Printf("invalid chunk position: %d", chunk.Position)
+			return
+		}
 	}
 
 	chunkToApply := data.Chunks
