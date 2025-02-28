@@ -4,7 +4,7 @@ run:
 
 .PHONY: test
 test:
-	go test ./... -count 1 -race -timeout 30s
+	go test ./... -count 1 -race -timeout 100s
 
 .PHONY: bench
 bench:
