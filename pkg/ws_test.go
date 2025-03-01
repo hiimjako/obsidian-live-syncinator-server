@@ -547,6 +547,93 @@ func Test_handleEvent(t *testing.T) {
 	})
 }
 
+func Test_handleCursor(t *testing.T) {
+	db := testutils.CreateDB(t)
+
+	mockFileStorage := new(filestorage.MockFileStorage)
+	authOptions := Options{JWTSecret: []byte("secret")}
+	handler := New(db, mockFileStorage, authOptions)
+	ts := httptest.NewServer(handler)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+
+	var workspaceID1 int64 = 1
+	var workspaceID2 int64 = 2
+	urlWorkspace1 := createWsUrlWithAuth(t, ts.URL, workspaceID1, authOptions.JWTSecret)
+	urlWorkspace2 := createWsUrlWithAuth(t, ts.URL, workspaceID2, authOptions.JWTSecret)
+
+	//nolint:bodyclose
+	senderWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
+	require.NoError(t, err)
+
+	//nolint:bodyclose
+	receiverWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
+	require.NoError(t, err)
+
+	//nolint:bodyclose
+	receiverWorkspace2, _, err := websocket.Dial(ctx, urlWorkspace2, nil)
+	require.NoError(t, err)
+
+	msg := CursorMessage{
+		WsMessageHeader: WsMessageHeader{
+			Type:   CursorEventType,
+			FileID: 1,
+		},
+		Path:  "foo.md",
+		Label: "user",
+		Color: "red",
+		Line:  1,
+		Ch:    2,
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(3)
+
+	// check that only ws on same workspace receive the event
+
+	go func() {
+		// the sender should not receive any message
+		var recMsg CursorMessage
+		err := wsjson.Read(ctx, senderWorkspace1, &recMsg)
+		assert.Error(t, err)
+
+		wg.Done()
+	}()
+
+	go func() {
+		// the receiver on other workspace should not receive any message
+		var recMsg CursorMessage
+		err := wsjson.Read(ctx, receiverWorkspace2, &recMsg)
+		assert.Error(t, err)
+
+		wg.Done()
+	}()
+
+	go func() {
+		// the receiver on the same workspace should receive the message
+		var recMsg CursorMessage
+		err := wsjson.Read(ctx, receiverWorkspace1, &recMsg)
+		assert.NoError(t, err)
+		msg.ID = recMsg.ID // set the random uuid
+		assert.Equal(t, msg, recMsg)
+
+		wg.Done()
+	}()
+
+	assert.NoError(t, wsjson.Write(ctx, senderWorkspace1, msg))
+
+	wg.Wait()
+
+	t.Cleanup(func() {
+		cancel()
+		senderWorkspace1.Close(websocket.StatusNormalClosure, "")
+		receiverWorkspace1.Close(websocket.StatusNormalClosure, "")
+		receiverWorkspace2.Close(websocket.StatusNormalClosure, "")
+		ts.Close()
+		handler.Close()
+	})
+}
+
 func Test_processFileChanges(t *testing.T) {
 	t.Run("should not write file to storage and save snapshot if too early", func(t *testing.T) {
 		db := testutils.CreateDB(t)

@@ -26,6 +26,7 @@ const (
 	CreateEventType MessageType = iota
 	DeleteEventType MessageType = iota
 	RenameEventType MessageType = iota
+	CursorEventType MessageType = iota
 )
 
 type WsMessageHeader struct {
@@ -43,6 +44,16 @@ type ChunkMessage struct {
 	WsMessageHeader
 	Chunks  []diff.Chunk `json:"chunks"`
 	Version int64        `json:"version"`
+}
+
+type CursorMessage struct {
+	WsMessageHeader
+	ID    string  `json:"id,omitempty,omitzero"`
+	Path  string  `json:"path"`
+	Label string  `json:"label"`
+	Color string  `json:"color"`
+	Line  float64 `json:"line"`
+	Ch    float64 `json:"ch"`
 }
 
 func (s *syncinator) wsHandler() http.Handler {
@@ -73,7 +84,7 @@ func (s *syncinator) createSubscriber(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *syncinator) subscribe(w http.ResponseWriter, r *http.Request) error {
-	sub, err := NewSubscriber(s.ctx, w, r, s.onChunkMessage, s.onEventMessage)
+	sub, err := NewSubscriber(s.ctx, w, r, s.onChunkMessage, s.onEventMessage, s.onCursorMessage)
 	if err != nil {
 		return err
 	}
@@ -90,6 +101,10 @@ func (s *syncinator) subscribe(w http.ResponseWriter, r *http.Request) error {
 
 func (s *syncinator) onEventMessage(sender *subscriber, event EventMessage) {
 	s.broadcastMessage(sender, event)
+}
+
+func (s *syncinator) onCursorMessage(sender *subscriber, cursor CursorMessage) {
+	s.broadcastMessage(sender, cursor)
 }
 
 func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
@@ -265,6 +280,18 @@ func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
 
 			select {
 			case sub.eventMsgQueue <- m:
+			default:
+				go sub.closeSlow()
+			}
+		case CursorMessage:
+			if isSameClient {
+				continue
+			}
+
+			m.ID = sender.clientID
+
+			select {
+			case sub.cursorMsgQueue <- m:
 			default:
 				go sub.closeSlow()
 			}

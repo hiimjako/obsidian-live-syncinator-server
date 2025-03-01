@@ -64,5 +64,4 @@ This is recreational software provided as-is, without any warranty. While the pl
 
 - Create cluster of servers
 - Ad DST (deterministic simulation testing) to test chunks
-- Fix write on disk, sometime there are strange behavior
 - Add optional encryption to files
