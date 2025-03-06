@@ -22,14 +22,16 @@ type subscriber struct {
 	r    *http.Request
 	ctx  context.Context
 
-	isConnected    atomic.Bool
-	clientID       string
-	workspaceID    int64
-	chunkMsgQueue  chan ChunkMessage
-	eventMsgQueue  chan EventMessage
-	closeSlow      func()
-	onChunkMessage func(*subscriber, ChunkMessage)
-	onEventMessage func(*subscriber, EventMessage)
+	isConnected     atomic.Bool
+	clientID        string
+	workspaceID     int64
+	chunkMsgQueue   chan ChunkMessage
+	eventMsgQueue   chan EventMessage
+	cursorMsgQueue  chan CursorMessage
+	closeSlow       func()
+	onChunkMessage  func(*subscriber, ChunkMessage)
+	onEventMessage  func(*subscriber, EventMessage)
+	onCursorMessage func(*subscriber, CursorMessage)
 }
 
 func NewSubscriber(
@@ -38,6 +40,7 @@ func NewSubscriber(
 	r *http.Request,
 	onChunkMessage func(*subscriber, ChunkMessage),
 	onEventMessage func(*subscriber, EventMessage),
+	onCursorMessage func(*subscriber, CursorMessage),
 ) (*subscriber, error) {
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"localhost", "127.0.0.1", "obsidian.md"},
@@ -50,22 +53,24 @@ func NewSubscriber(
 	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
 
 	s := &subscriber{
-		conn:          c,
-		w:             w,
-		r:             r,
-		ctx:           ctx,
-		isConnected:   atomic.Bool{},
-		chunkMsgQueue: make(chan ChunkMessage, subscriberMessageBuffer),
-		eventMsgQueue: make(chan EventMessage, subscriberMessageBuffer),
-		workspaceID:   workspaceID,
-		clientID:      uuid.New().String(),
+		conn:           c,
+		w:              w,
+		r:              r,
+		ctx:            ctx,
+		isConnected:    atomic.Bool{},
+		chunkMsgQueue:  make(chan ChunkMessage, subscriberMessageBuffer),
+		eventMsgQueue:  make(chan EventMessage, subscriberMessageBuffer),
+		cursorMsgQueue: make(chan CursorMessage, subscriberMessageBuffer),
+		workspaceID:    workspaceID,
+		clientID:       uuid.New().String(),
 		closeSlow: func() {
 			if c != nil {
 				c.Close(websocket.StatusPolicyViolation, "connection too slow to keep up with messages")
 			}
 		},
-		onChunkMessage: onChunkMessage,
-		onEventMessage: onEventMessage,
+		onChunkMessage:  onChunkMessage,
+		onEventMessage:  onEventMessage,
+		onCursorMessage: onCursorMessage,
 	}
 
 	s.isConnected.Store(true)
@@ -122,6 +127,15 @@ func (s *subscriber) Listen() {
 				}
 
 				s.onEventMessage(s, event)
+			case CursorEventType:
+				var curosr CursorMessage
+				err := mapToStruct(msg, &curosr)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+
+				s.onCursorMessage(s, curosr)
 			}
 		}
 	}()
@@ -140,6 +154,12 @@ func (s *subscriber) Listen() {
 				err := s.WriteMessage(eventMsg, time.Second*1)
 				if err != nil {
 					log.Printf("error sending event message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
+					s.checkWsError(err)
+				}
+			case cursorMsg := <-s.cursorMsgQueue:
+				err := s.WriteMessage(cursorMsg, time.Second*1)
+				if err != nil {
+					log.Printf("error sending cursor message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
 					s.checkWsError(err)
 				}
 			case <-s.ctx.Done():
