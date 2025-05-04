@@ -86,18 +86,12 @@ func (d Disk) WriteObject(relativePath string, content io.Reader) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
 	_, err = io.Copy(file, content)
 	if err != nil {
 		return fmt.Errorf("failed to write content: %w", err)
 	}
-
-	// TODO: avoid to call it each time, it is a cost.
-	err = file.Sync()
-	if err != nil {
-		return fmt.Errorf("failed to sync file: %w", err)
-	}
+	file.Close()
 
 	err = os.Rename(tmpPath, diskPath)
 	if err != nil {
