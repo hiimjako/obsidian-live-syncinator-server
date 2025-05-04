@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"math/rand/v2"
+
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"github.com/hiimjako/syncinator/internal/repository"
@@ -17,7 +19,6 @@ import (
 	"github.com/hiimjako/syncinator/pkg/filestorage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 )
 
 type testOperation struct {
@@ -28,9 +29,9 @@ type testOperation struct {
 
 func Test_loadTest(t *testing.T) {
 	t.Run("deterministic concurrent operations", func(t *testing.T) {
-		seed := time.Now().UnixNano()
-		//nolint
-		rnd := rand.New(rand.NewSource(uint64(seed)))
+		seed := rand.NewPCG(42, 1024)
+		rnd := rand.New(seed)
+
 		t.Logf("Using seed: %d", seed)
 
 		const (
@@ -75,7 +76,7 @@ func Test_loadTest(t *testing.T) {
 		clients := make([]*testClient, numClients)
 		urlWorkspace := createWsUrlWithAuth(t, ts.URL, workspaceID, opts.JWTSecret)
 
-		for i := 0; i < numClients; i++ {
+		for i := range numClients {
 			//nolint
 			conn, _, err := websocket.Dial(ctx, urlWorkspace, nil)
 			require.NoError(t, err)
@@ -190,11 +191,11 @@ func generateDeterministicOperations(
 	operations := make([]testOperation, numClients*opsPerClient)
 	currentContent := initialContent
 
-	for i := 0; i < numClients*opsPerClient; i++ {
+	for i := range numClients * opsPerClient {
 		clientID := i % numClients
 		sequence := i
 
-		pos := rnd.Intn(len(currentContent) + 1)
+		pos := rnd.IntN(len(currentContent) + 1)
 		opType := diff.Add
 		if rnd.Float32() < 0.5 {
 			opType = diff.Remove
@@ -202,10 +203,10 @@ func generateDeterministicOperations(
 
 		var chunk diff.Chunk
 		if opType == diff.Add {
-			length := rnd.Intn(maxChunkSize) + 1
+			length := rnd.IntN(maxChunkSize) + 1
 			text := make([]byte, length)
 			for j := range text {
-				text[j] = byte(rnd.Intn(26) + 'a')
+				text[j] = byte(rnd.IntN(26) + 'a')
 			}
 			chunk = diff.Chunk{
 				Position: int64(pos),
@@ -214,7 +215,7 @@ func generateDeterministicOperations(
 				Len:      int64(length),
 			}
 		} else {
-			length := rnd.Intn(maxChunkSize)
+			length := rnd.IntN(maxChunkSize)
 			chunk = diff.Chunk{
 				Position: int64(pos),
 				Type:     opType,
