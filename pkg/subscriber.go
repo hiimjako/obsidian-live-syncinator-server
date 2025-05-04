@@ -93,12 +93,14 @@ func (s *subscriber) Listen() {
 	go func() {
 		for {
 			if !s.IsConnected() {
+				s.Close()
 				return
 			}
 
 			msg, err := s.WaitMessage()
 			if err != nil {
 				s.checkWsError(err)
+				s.Close()
 				continue
 			}
 
