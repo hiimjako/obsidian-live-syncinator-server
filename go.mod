@@ -11,10 +11,9 @@ require (
 	github.com/pressly/goose/v3 v3.24.2
 	github.com/rs/cors v1.11.1
 	github.com/sergi/go-diff v1.3.1
-	github.com/sethvargo/go-envconfig v1.1.1
+	github.com/sethvargo/go-envconfig v1.3.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.37.0
-	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
 	golang.org/x/time v0.11.0
 )
 
