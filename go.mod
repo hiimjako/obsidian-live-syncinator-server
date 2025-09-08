@@ -1,6 +1,6 @@
 module github.com/hiimjako/syncinator
 
-go 1.23.2
+go 1.24.0
 
 require (
 	github.com/coder/websocket v1.8.13
@@ -13,8 +13,7 @@ require (
 	github.com/sergi/go-diff v1.3.1
 	github.com/sethvargo/go-envconfig v1.1.1
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/crypto v0.37.0
-	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
+	golang.org/x/crypto v0.42.0
 	golang.org/x/time v0.11.0
 )
 
