@@ -92,51 +92,51 @@ func Apply(text []rune, chunk Chunk) []rune {
 	panic("not reachable")
 }
 
-func Transform(lastOp, opToTransform Chunk) Chunk {
-	transformed := opToTransform
-
-	switch lastOp.Type {
-	case Add:
-		switch opToTransform.Type {
-		case Add:
-			if lastOp.Position <= opToTransform.Position {
-				transformed.Position += lastOp.Len
+// Transform updates op2 based on op1
+// op1 is the operation that has already been applied.
+// op2 is the operation that needs to be transformed.
+func Transform(op1, op2 Chunk) Chunk {
+	if op1.Type == Add {
+		if op2.Type == Add {
+			// If op1 is inserted before op2, shift op2's position
+			if op1.Position < op2.Position || (op1.Position == op2.Position) {
+				op2.Position += op1.Len
 			}
-		case Remove:
-			if lastOp.Position <= opToTransform.Position {
-				transformed.Position += lastOp.Len
+		} else {
+			// If op1 is inserted before op2's start, shift op2's position
+			if op1.Position <= op2.Position {
+				op2.Position += op1.Len
+			} else if op1.Position < op2.Position+op2.Len {
+				// If op1 is inserted within op2's range, expand op2's length
+				op2.Len += op1.Len
 			}
 		}
-	case Remove:
-		switch opToTransform.Type {
-		case Add:
-			if lastOp.Position < opToTransform.Position {
-				transformed.Position -= min(lastOp.Len, opToTransform.Position-lastOp.Position)
+	} else {
+		if op2.Type == Add {
+			if op1.Position < op2.Position {
+				shift := min(op1.Len, op2.Position-op1.Position)
+				op2.Position -= shift
 			}
-		case Remove:
-			if lastOp.Position < opToTransform.Position+opToTransform.Len &&
-				lastOp.Position+lastOp.Len > opToTransform.Position {
-				startOverlap := max(lastOp.Position, opToTransform.Position)
-				endOverlap := min(lastOp.Position+lastOp.Len, opToTransform.Position+opToTransform.Len)
-
-				overlapStartInopToTransform := startOverlap - opToTransform.Position
-				overlapEndInopToTransform := endOverlap - opToTransform.Position
-
-				opToTransformRune := []rune(opToTransform.Text)
-				opToTransformText := make([]rune, 0, overlapEndInopToTransform)
-				opToTransformText = append(opToTransformText, opToTransformRune[:overlapStartInopToTransform]...)
-				opToTransformText = append(opToTransformText, opToTransformRune[overlapEndInopToTransform:]...)
-
-				transformed.Position = min(opToTransform.Position, lastOp.Position)
-				transformed.Len -= endOverlap - startOverlap
-				transformed.Text = string(opToTransformText)
-			} else if lastOp.Position <= opToTransform.Position {
-				transformed.Position -= lastOp.Len
+		} else {
+			// Calculate the new position of op2
+			newOp2Position := op2.Position
+			if op1.Position < op2.Position {
+				newOp2Position -= min(op1.Len, op2.Position-op1.Position)
 			}
+
+			// Calculate the new length of op2
+			newOp2Len := op2.Len
+			overlapStart := max(op1.Position, op2.Position)
+			overlapEnd := min(op1.Position+op1.Len, op2.Position+op2.Len)
+			overlapLen := max(0, overlapEnd-overlapStart)
+
+			newOp2Len -= overlapLen
+
+			op2.Position = newOp2Position
+			op2.Len = newOp2Len
 		}
 	}
-
-	return transformed
+	return op2
 }
 
 func TransformMultiple(lastOpList, opToTransformList []Chunk) []Chunk {
