@@ -74,7 +74,7 @@ func Test_loadTest(t *testing.T) {
 
 		// Create and initialize clients
 		clients := make([]*testClient, numClients)
-		urlWorkspace := createWsUrlWithAuth(t, ts.URL, workspaceID, opts.JWTSecret)
+		urlWorkspace := createWsURLWithAuth(t, ts.URL, workspaceID, opts.JWTSecret)
 
 		for i := range numClients {
 			//nolint

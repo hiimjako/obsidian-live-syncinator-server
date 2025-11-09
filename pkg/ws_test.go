@@ -27,12 +27,12 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func createWsUrlWithAuth(t testing.TB, url string, workspaceID int64, secret []byte) string {
+func createWsURLWithAuth(t testing.TB, url string, workspaceID int64, secret []byte) string {
 	token, err := middleware.CreateToken(middleware.AuthOptions{SecretKey: secret}, workspaceID)
 	require.NoError(t, err)
 
-	newUrl := strings.Replace(url, "http", "ws", 1) + PathWebSocket
-	urlWithAuth := fmt.Sprintf("%s?jwt=%s", newUrl, token)
+	newURL := strings.Replace(url, "http", "ws", 1) + PathWebSocket
+	urlWithAuth := fmt.Sprintf("%s?jwt=%s", newURL, token)
 
 	return urlWithAuth
 }
@@ -55,7 +55,7 @@ func Test_wsAuth(t *testing.T) {
 
 	t.Run("authorized", func(t *testing.T) {
 		var workspaceID int64 = 10
-		url := createWsUrlWithAuth(t, ts.URL, workspaceID, authOptions.JWTSecret)
+		url := createWsURLWithAuth(t, ts.URL, workspaceID, authOptions.JWTSecret)
 
 		//nolint:bodyclose
 		sender, _, err := websocket.Dial(ctx, url, nil)
@@ -76,7 +76,7 @@ func Test_wsAuth(t *testing.T) {
 
 	t.Run("unauthorized", func(t *testing.T) {
 		var workspaceID int64 = 11
-		url := createWsUrlWithAuth(t, ts.URL, workspaceID, []byte("invalid secret"))
+		url := createWsURLWithAuth(t, ts.URL, workspaceID, []byte("invalid secret"))
 
 		//nolint:bodyclose
 		_, _, err := websocket.Dial(ctx, url, nil)
@@ -111,8 +111,8 @@ func Test_handleChunk(t *testing.T) {
 
 		var workspaceID1 int64 = 1
 		var workspaceID2 int64 = 2
-		urlWorkspace1 := createWsUrlWithAuth(t, ts.URL, workspaceID1, opts.JWTSecret)
-		urlWorkspace2 := createWsUrlWithAuth(t, ts.URL, workspaceID2, opts.JWTSecret)
+		urlWorkspace1 := createWsURLWithAuth(t, ts.URL, workspaceID1, opts.JWTSecret)
+		urlWorkspace2 := createWsURLWithAuth(t, ts.URL, workspaceID2, opts.JWTSecret)
 
 		//nolint:bodyclose
 		senderWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
@@ -258,7 +258,7 @@ func Test_handleChunk(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
-		urlWorkspace := createWsUrlWithAuth(t, ts.URL, workspaceID, authOptions.JWTSecret)
+		urlWorkspace := createWsURLWithAuth(t, ts.URL, workspaceID, authOptions.JWTSecret)
 
 		client1Content := startingString
 		//nolint:bodyclose
@@ -479,8 +479,8 @@ func Test_handleEvent(t *testing.T) {
 
 	var workspaceID1 int64 = 1
 	var workspaceID2 int64 = 2
-	urlWorkspace1 := createWsUrlWithAuth(t, ts.URL, workspaceID1, authOptions.JWTSecret)
-	urlWorkspace2 := createWsUrlWithAuth(t, ts.URL, workspaceID2, authOptions.JWTSecret)
+	urlWorkspace1 := createWsURLWithAuth(t, ts.URL, workspaceID1, authOptions.JWTSecret)
+	urlWorkspace2 := createWsURLWithAuth(t, ts.URL, workspaceID2, authOptions.JWTSecret)
 
 	//nolint:bodyclose
 	senderWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
@@ -561,8 +561,8 @@ func Test_handleCursor(t *testing.T) {
 
 	var workspaceID1 int64 = 1
 	var workspaceID2 int64 = 2
-	urlWorkspace1 := createWsUrlWithAuth(t, ts.URL, workspaceID1, authOptions.JWTSecret)
-	urlWorkspace2 := createWsUrlWithAuth(t, ts.URL, workspaceID2, authOptions.JWTSecret)
+	urlWorkspace1 := createWsURLWithAuth(t, ts.URL, workspaceID1, authOptions.JWTSecret)
+	urlWorkspace2 := createWsURLWithAuth(t, ts.URL, workspaceID2, authOptions.JWTSecret)
 
 	//nolint:bodyclose
 	senderWorkspace1, _, err := websocket.Dial(ctx, urlWorkspace1, nil)
