@@ -196,12 +196,12 @@ func Test_handleChunk(t *testing.T) {
 		updatedFile, err := handler.db.FetchFile(context.Background(), file.ID)
 		assert.NoError(t, err)
 
-		handler.mut.Lock()
+		handler.filesMu.Lock()
 		assert.Equal(t, int64(1), handler.files[file.ID].Version)
+		handler.filesMu.Unlock()
 		assert.Equal(t, int64(1), updatedFile.Version)
 		assert.Greater(t, updatedFile.UpdatedAt, file.UpdatedAt)
 		assert.Equal(t, "334d016f755cd6dc58c53a86e183882f8ec14f52fb05345887c8a5edd42c87b7", updatedFile.Hash)
-		handler.mut.Unlock()
 
 		// check operation history
 		operations, err := handler.db.FetchFileOperationsFromVersion(
@@ -410,7 +410,9 @@ func Test_handleChunk(t *testing.T) {
 		updatedFile, err := handler.db.FetchFile(context.Background(), file.ID)
 		require.NoError(t, err)
 
+		handler.filesMu.Lock()
 		assert.Equal(t, int64(2), handler.files[file.ID].Version)
+		handler.filesMu.Unlock()
 		assert.Equal(t, int64(2), updatedFile.Version)
 
 		// check operation history
@@ -646,19 +648,21 @@ func Test_processFileChanges(t *testing.T) {
 		// processFileChanges is already running. Started in New()
 		handler := New(db, fs, opts)
 
-		handler.mut.Lock()
-		handler.files[1] = CachedFile{
-			pendingChanges: 1,
-			Content:        "foo",
-			File: repository.File{
-				ID:          1,
-				Version:     1,
-				DiskPath:    "file.md",
-				WorkspaceID: 1,
-				UpdatedAt:   time.Now(),
+		handler.filesMu.Lock()
+		handler.files[1] = &LockedCachedFile{
+			CachedFile: CachedFile{
+				pendingChanges: 1,
+				Content:        "foo",
+				File: repository.File{
+					ID:          1,
+					Version:     1,
+					DiskPath:    "file.md",
+					WorkspaceID: 1,
+					UpdatedAt:   time.Now(),
+				},
 			},
 		}
-		handler.mut.Unlock()
+		handler.filesMu.Unlock()
 
 		time.Sleep(200 * time.Millisecond)
 
@@ -697,19 +701,21 @@ func Test_processFileChanges(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		handler.mut.Lock()
-		handler.files[1] = CachedFile{
-			pendingChanges: 3,
-			Content:        "foo",
-			File: repository.File{
-				ID:          1,
-				Version:     1,
-				DiskPath:    filename,
-				WorkspaceID: 1,
-				UpdatedAt:   time.Now().Add(1 * time.Hour),
+		handler.filesMu.Lock()
+		handler.files[1] = &LockedCachedFile{
+			CachedFile: CachedFile{
+				pendingChanges: 3,
+				Content:        "foo",
+				File: repository.File{
+					ID:          1,
+					Version:     1,
+					DiskPath:    filename,
+					WorkspaceID: 1,
+					UpdatedAt:   time.Now().Add(1 * time.Hour),
+				},
 			},
 		}
-		handler.mut.Unlock()
+		handler.filesMu.Unlock()
 		time.Sleep(2 * opts.FlushInterval)
 
 		// check file write
@@ -746,9 +752,11 @@ func Test_processFileChanges(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "foo", string(sFileContent))
 
-		handler.mut.Lock()
+		handler.filesMu.Lock()
+		handler.files[1].mut.Lock()
 		assert.EqualValues(t, 0, handler.files[1].pendingChanges)
-		handler.mut.Unlock()
+		handler.files[1].mut.Unlock()
+		handler.filesMu.Unlock()
 	})
 
 	t.Run("should write file to storage and save snapshot after time elapsed", func(t *testing.T) {
@@ -776,19 +784,21 @@ func Test_processFileChanges(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		handler.mut.Lock()
-		handler.files[1] = CachedFile{
-			pendingChanges: 1,
-			Content:        "foo",
-			File: repository.File{
-				ID:          1,
-				Version:     1,
-				DiskPath:    filename,
-				WorkspaceID: 1,
-				UpdatedAt:   time.Now().Add(-1 * time.Hour),
-			},
+		handler.filesMu.Lock()
+		handler.files[1] = &LockedCachedFile{
+			CachedFile: CachedFile{
+				pendingChanges: 1,
+				Content:        "foo",
+				File: repository.File{
+					ID:          1,
+					Version:     1,
+					DiskPath:    filename,
+					WorkspaceID: 1,
+					UpdatedAt:   time.Now().Add(-1 * time.Hour),
+				},
+			}, // Added closing brace for CachedFile
 		}
-		handler.mut.Unlock()
+		handler.filesMu.Unlock()
 		time.Sleep(2 * opts.FlushInterval)
 
 		// check file write
@@ -825,9 +835,11 @@ func Test_processFileChanges(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "foo", string(sFileContent))
 
-		handler.mut.Lock()
+		handler.filesMu.Lock()
+		handler.files[1].mut.Lock()
 		assert.EqualValues(t, 0, handler.files[1].pendingChanges)
-		handler.mut.Unlock()
+		handler.files[1].mut.Unlock()
+		handler.filesMu.Unlock()
 	})
 }
 

@@ -141,9 +141,9 @@ func Test_loadTest(t *testing.T) {
 		}
 
 		// Verify server state matches
-		handler.mut.Lock()
+		handler.filesMu.Lock()
 		serverContent := handler.files[1].Content
-		handler.mut.Unlock()
+		handler.filesMu.Unlock()
 		assert.Equal(t, serverContent, finalContent, "Server content mismatch")
 
 		// Verify file on disk matches after flush

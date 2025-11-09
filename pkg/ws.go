@@ -113,18 +113,21 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		return
 	}
 
-	s.mut.Lock()
-	defer s.mut.Unlock()
-
+	s.filesMu.Lock()
 	file, ok := s.files[data.FileID]
 	if !ok {
 		err := s.loadFileInCache(data.FileID)
 		if err != nil {
+			s.filesMu.Unlock()
 			log.Printf("error while caching file %v: %v\n", data.FileID, err)
 			return
 		}
 		file = s.files[data.FileID]
 	}
+	s.filesMu.Unlock()
+
+	file.mut.Lock()
+	defer file.mut.Unlock()
 
 	chunkToApply := data.Chunks
 
@@ -195,9 +198,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 
 	txq := s.db.WithTx(tx)
 	defer func() {
-		if committed {
-			s.files[data.FileID] = file
-		} else {
+		if !committed {
 			err := tx.Rollback()
 			if err != nil {
 				log.Printf("error rollbacking transaction. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
@@ -310,29 +311,31 @@ func (s *syncinator) processFileChanges() {
 	ticker := time.NewTicker(s.flushInterval)
 
 	f := func() {
-		s.mut.Lock()
-		for fileID, file := range s.files {
+		s.filesMu.Lock()
+		for _, file := range s.files {
+			file.mut.Lock()
 			if file.pendingChanges <= 0 {
+				file.mut.Unlock()
 				continue
 			}
 
 			if file.pendingChanges > s.minChangesThreshold ||
 				time.Since(file.UpdatedAt) >= s.flushInterval {
-				err := s.CreateFileSnapshot(file)
+				err := s.CreateFileSnapshot(file.CachedFile)
 				if err != nil {
 					log.Printf("error while creating snapshot: %v", err)
 				}
 
-				err = s.writeFileToStorage(file)
+				err = s.writeFileToStorage(file.CachedFile)
 				if err != nil {
 					log.Println(err)
 				} else {
 					file.pendingChanges = 0
-					s.files[fileID] = file
 				}
 			}
+			file.mut.Unlock()
 		}
-		s.mut.Unlock()
+		s.filesMu.Unlock()
 	}
 
 	for {
@@ -361,17 +364,19 @@ func (s *syncinator) purgeCache() {
 			}
 
 			// removing items from files
-			s.mut.Lock()
+			s.filesMu.Lock()
 			for key, file := range s.files {
+				file.mut.Lock()
 				if time.Since(file.UpdatedAt) >= s.cacheMaxAge {
-					err := s.writeFileToStorage(file)
+					err := s.writeFileToStorage(file.CachedFile)
 					if err != nil {
 						log.Printf("error while writing file %d before purge: %v\n", file.ID, err)
 					}
 					delete(s.files, key)
 				}
+				file.mut.Unlock()
 			}
-			s.mut.Unlock()
+			s.filesMu.Unlock()
 
 		case <-s.ctx.Done():
 			return
@@ -380,25 +385,28 @@ func (s *syncinator) purgeCache() {
 }
 
 func (s *syncinator) WriteFileToStorage(fileID int64) error {
-	s.mut.Lock()
-	defer s.mut.Unlock()
+	s.filesMu.Lock()
 	file, ok := s.files[fileID]
 	if !ok {
+		s.filesMu.Unlock()
 		// not in cache, it means it is already up to date
 		return nil
 	}
+	s.filesMu.Unlock()
+
+	file.mut.Lock()
+	defer file.mut.Unlock()
 
 	if file.pendingChanges <= 0 {
 		return nil
 	}
 
-	err := s.writeFileToStorage(file)
+	err := s.writeFileToStorage(file.CachedFile)
 	if err != nil {
 		return err
 	}
 
 	file.pendingChanges = 0
-	s.files[fileID] = file
 
 	return nil
 }
@@ -465,7 +473,7 @@ func (s *syncinator) deleteSubscriber(sub *subscriber) {
 }
 
 // loadFileInCache caches the file from db
-// is not thread safe
+// is not thread safe, it should be called with s.filesMu locked
 func (s *syncinator) loadFileInCache(fileID int64) error {
 	file, err := s.db.FetchFile(s.ctx, fileID)
 	if err != nil {
@@ -487,9 +495,11 @@ func (s *syncinator) loadFileInCache(fileID int64) error {
 		log.Panicf("error while reading file, %v\n", err)
 	}
 
-	s.files[file.ID] = CachedFile{
-		File:    file,
-		Content: string(fileContent),
+	s.files[file.ID] = &LockedCachedFile{
+		CachedFile: CachedFile{
+			File:    file,
+			Content: string(fileContent),
+		},
 	}
 
 	return nil

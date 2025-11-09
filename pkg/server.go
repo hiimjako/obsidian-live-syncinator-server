@@ -52,10 +52,14 @@ type CachedFile struct {
 	pendingChanges int64
 }
 
+type LockedCachedFile struct {
+	mut sync.Mutex
+	CachedFile
+}
+
 type syncinator struct {
 	ctx    context.Context
 	cancel context.CancelFunc
-	mut    sync.Mutex
 
 	jwtSecret           []byte
 	maxFileSizeBytes    int64
@@ -67,7 +71,8 @@ type syncinator struct {
 	serverMux      *http.ServeMux
 	subscribersMu  sync.Mutex
 	subscribers    map[*subscriber]struct{}
-	files          map[int64]CachedFile
+	filesMu        sync.Mutex
+	files          map[int64]*LockedCachedFile
 	storage        filestorage.Storage
 	db             *repository.Queries
 	conn           *sql.DB
@@ -91,7 +96,7 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 		serverMux:      http.NewServeMux(),
 		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),
 		subscribers:    make(map[*subscriber]struct{}),
-		files:          make(map[int64]CachedFile),
+		files:          make(map[int64]*LockedCachedFile),
 		storage:        fs,
 		conn:           db,
 		db:             repo,
