@@ -24,12 +24,14 @@ const (
 )
 
 type Options struct {
-	JWTSecret           []byte
-	MaxFileSizeMB       int64
-	CacheMaxAge         time.Duration
-	CacheSize           int
-	MinChangesThreshold int64
-	FlushInterval       time.Duration
+	JWTSecret            []byte
+	MaxFileSizeMB        int64
+	CacheMaxAge          time.Duration
+	CacheSize            int
+	MinChangesThreshold  int64
+	FlushInterval        time.Duration
+	SnapshotCheckpoint   int64 // Create full snapshot every N versions
+	MaxSnapshotDiffChain int64 // Max consecutive diffs before forcing full snapshot
 }
 
 func (o *Options) Default() {
@@ -52,6 +54,14 @@ func (o *Options) Default() {
 	if o.FlushInterval <= 0 {
 		o.FlushInterval = 1 * time.Minute
 	}
+
+	if o.SnapshotCheckpoint <= 0 {
+		o.SnapshotCheckpoint = 5 // Full snapshot every 5 versions
+	}
+
+	if o.MaxSnapshotDiffChain <= 0 {
+		o.MaxSnapshotDiffChain = 10 // Max 10 consecutive diffs
+	}
 }
 
 type CachedFile struct {
@@ -69,11 +79,13 @@ type syncinator struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	jwtSecret           []byte
-	maxFileSizeBytes    int64
-	cacheMaxAge         time.Duration
-	minChangesThreshold int64
-	flushInterval       time.Duration
+	jwtSecret            []byte
+	maxFileSizeBytes     int64
+	cacheMaxAge          time.Duration
+	minChangesThreshold  int64
+	flushInterval        time.Duration
+	snapshotCheckpoint   int64
+	maxSnapshotDiffChain int64
 
 	publishLimiter *rate.Limiter
 	serverMux      *http.ServeMux
@@ -95,11 +107,13 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 		ctx:    ctx,
 		cancel: cancel,
 
-		jwtSecret:           opts.JWTSecret,
-		maxFileSizeBytes:    opts.MaxFileSizeMB << 20,
-		cacheMaxAge:         opts.CacheMaxAge,
-		minChangesThreshold: opts.MinChangesThreshold,
-		flushInterval:       opts.FlushInterval,
+		jwtSecret:            opts.JWTSecret,
+		maxFileSizeBytes:     opts.MaxFileSizeMB << 20,
+		cacheMaxAge:          opts.CacheMaxAge,
+		minChangesThreshold:  opts.MinChangesThreshold,
+		flushInterval:        opts.FlushInterval,
+		snapshotCheckpoint:   opts.SnapshotCheckpoint,
+		maxSnapshotDiffChain: opts.MaxSnapshotDiffChain,
 
 		serverMux:      http.NewServeMux(),
 		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),

@@ -7,8 +7,10 @@ CREATE TABLE snapshots (
   hash TEXT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
   type TEXT CHECK (type IN ('file', 'diff')) NOT NULL,
+  workspace_id INTEGER NOT NULL,
   PRIMARY KEY (file_id, version),
-  FOREIGN KEY (file_id) REFERENCES files (id)
+  FOREIGN KEY (file_id) REFERENCES files (id),
+  FOREIGN KEY (workspace_id) REFERENCES workspaces (id)
 );
 
 -- +goose StatementEnd

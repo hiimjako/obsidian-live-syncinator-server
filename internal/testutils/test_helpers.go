@@ -59,7 +59,7 @@ type FileWithContent struct {
 }
 
 type SnapshotWithContent struct {
-	Metadata repository.FetchSnapshotRow
+	Metadata repository.Snapshot
 	Content  []byte
 }
 

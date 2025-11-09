@@ -667,7 +667,7 @@ func Test_processFileChanges(t *testing.T) {
 		_, err := fs.ReadObject("file.md")
 		assert.Error(t, err)
 
-		_, err = handler.db.FetchSnapshot(handler.ctx, repository.FetchSnapshotParams{
+		_, err = handler.db.FetchSnapshotByVersion(handler.ctx, repository.FetchSnapshotByVersionParams{
 			FileID:  1,
 			Version: 1,
 		})
@@ -725,22 +725,20 @@ func Test_processFileChanges(t *testing.T) {
 		assert.Equal(t, "foo", string(fileContent))
 
 		// check snapshot
-		s, err := handler.db.FetchSnapshot(handler.ctx, repository.FetchSnapshotParams{
+		s, err := handler.db.FetchSnapshotByVersion(handler.ctx, repository.FetchSnapshotByVersionParams{
 			FileID:      1,
 			Version:     1,
 			WorkspaceID: 1,
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, repository.FetchSnapshotRow{
-			FileID:        1,
-			Version:       1,
-			DiskPath:      s.DiskPath,
-			CreatedAt:     s.CreatedAt,
-			Type:          "file",
-			WorkspaceID:   1,
-			WorkspacePath: "path",
-			MimeType:      "mime",
-			Hash:          "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+		assert.Equal(t, repository.Snapshot{
+			FileID:      1,
+			Version:     1,
+			DiskPath:    s.DiskPath,
+			CreatedAt:   s.CreatedAt,
+			Type:        "file",
+			WorkspaceID: 1,
+			Hash:        "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
 		}, s)
 
 		sFileReader, err := fs.ReadObject(s.DiskPath)
@@ -807,22 +805,20 @@ func Test_processFileChanges(t *testing.T) {
 		assert.Equal(t, "foo", string(fileContent))
 
 		// check snapshot
-		s, err := handler.db.FetchSnapshot(handler.ctx, repository.FetchSnapshotParams{
+		s, err := handler.db.FetchSnapshotByVersion(handler.ctx, repository.FetchSnapshotByVersionParams{
 			FileID:      1,
 			Version:     1,
 			WorkspaceID: 1,
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, repository.FetchSnapshotRow{
-			FileID:        1,
-			Version:       1,
-			DiskPath:      s.DiskPath,
-			CreatedAt:     s.CreatedAt,
-			Type:          "file",
-			WorkspaceID:   1,
-			WorkspacePath: "path",
-			MimeType:      "mime",
-			Hash:          "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+		assert.Equal(t, repository.Snapshot{
+			FileID:      1,
+			Version:     1,
+			DiskPath:    s.DiskPath,
+			CreatedAt:   s.CreatedAt,
+			Type:        "file",
+			WorkspaceID: 1,
+			Hash:        "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
 		}, s)
 
 		sFileReader, err := fs.ReadObject(s.DiskPath)

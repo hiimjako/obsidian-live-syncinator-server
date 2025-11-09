@@ -599,10 +599,12 @@ func Test_deleteFileHandler(t *testing.T) {
 		_, err := server.storage.CreateObject(strings.NewReader(snapshotContent))
 		require.NoError(t, err)
 		err = server.db.CreateSnapshot(server.ctx, repository.CreateSnapshotParams{
-			FileID:   createBody.ID,
-			Version:  createBody.Version,
-			DiskPath: diskPath,
-			Type:     "file",
+			FileID:      createBody.ID,
+			Version:     createBody.Version,
+			DiskPath:    diskPath,
+			Type:        "file",
+			Hash:        "test_hash",
+			WorkspaceID: workspaceID,
 		})
 		require.NoError(t, err)
 
@@ -948,10 +950,12 @@ func Test_listSnapshotsHandler(t *testing.T) {
 		require.Equal(t, http.StatusCreated, res.Code)
 
 		err := server.db.CreateSnapshot(server.ctx, repository.CreateSnapshotParams{
-			FileID:   file.ID,
-			Version:  file.Version,
-			DiskPath: "random_path",
-			Type:     "file",
+			FileID:      file.ID,
+			Version:     file.Version,
+			DiskPath:    "random_path",
+			Type:        "file",
+			Hash:        "test_hash",
+			WorkspaceID: file.WorkspaceID,
 		})
 		require.NoError(t, err)
 	}
@@ -972,11 +976,13 @@ func Test_listSnapshotsHandler(t *testing.T) {
 
 		assert.Equal(t, []repository.Snapshot{
 			{
-				FileID:    1,
-				Version:   0,
-				DiskPath:  "random_path",
-				CreatedAt: body[0].CreatedAt,
-				Type:      "file",
+				FileID:      1,
+				Version:     0,
+				DiskPath:    "random_path",
+				CreatedAt:   body[0].CreatedAt,
+				Type:        "file",
+				Hash:        "test_hash",
+				WorkspaceID: workspaceID,
 			},
 		}, body)
 	})
@@ -1040,10 +1046,12 @@ func Test_fetchSnapshotHandler(t *testing.T) {
 		diskPaths = append(diskPaths, diskPath)
 		require.NoError(t, err)
 		err = server.db.CreateSnapshot(server.ctx, repository.CreateSnapshotParams{
-			FileID:   file.ID,
-			Version:  file.Version,
-			DiskPath: diskPath,
-			Type:     "file",
+			FileID:      file.ID,
+			Version:     file.Version,
+			DiskPath:    diskPath,
+			Type:        "file",
+			Hash:        "test_hash",
+			WorkspaceID: file.WorkspaceID,
 		})
 		require.NoError(t, err)
 	}
@@ -1070,15 +1078,14 @@ func Test_fetchSnapshotHandler(t *testing.T) {
 	)
 	assert.Equal(t, http.StatusOK, res.Code)
 	assert.Equal(t, testutils.SnapshotWithContent{
-		Metadata: repository.FetchSnapshotRow{
-			FileID:        1,
-			Version:       0,
-			DiskPath:      diskPaths[0],
-			CreatedAt:     body.Metadata.CreatedAt,
-			Type:          "file",
-			WorkspaceID:   10,
-			MimeType:      "text/plain; charset=utf-8",
-			WorkspacePath: "/home/file/1",
+		Metadata: repository.Snapshot{
+			FileID:      1,
+			Version:     0,
+			DiskPath:    diskPaths[0],
+			CreatedAt:   body.Metadata.CreatedAt,
+			Type:        "file",
+			WorkspaceID: 10,
+			Hash:        body.Metadata.Hash,
 		},
 		Content: []byte("foo_1"),
 	}, body)

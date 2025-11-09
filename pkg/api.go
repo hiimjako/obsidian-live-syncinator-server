@@ -306,13 +306,20 @@ func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
-	file, err := s.db.FetchSnapshot(r.Context(), repository.FetchSnapshotParams{
+	snapshot, err := s.db.FetchSnapshotByVersion(r.Context(), repository.FetchSnapshotByVersionParams{
 		FileID:      int64(fileID),
 		Version:     int64(snapshotVersion),
 		WorkspaceID: workspaceID,
 	})
 	if err != nil {
 		http.Error(w, ErrNotExistingSnapshot, http.StatusNotFound)
+		return
+	}
+
+	// Reconstruct the file content at this version
+	content, err := s.ReconstructSnapshot(int64(fileID), int64(snapshotVersion), workspaceID)
+	if err != nil {
+		http.Error(w, "Error reconstructing snapshot", http.StatusInternalServerError)
 		return
 	}
 
@@ -330,24 +337,23 @@ func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Error creating metadata part", http.StatusInternalServerError)
 		return
 	}
-	if err := json.NewEncoder(metaPart).Encode(file); err != nil {
+	if err := json.NewEncoder(metaPart).Encode(snapshot); err != nil {
 		http.Error(w, "error creating JSON part", http.StatusInternalServerError)
 		return
 	}
 
-	fileContent, err := s.storage.ReadObject(file.DiskPath)
+	fileMeta, err := s.db.FetchFile(r.Context(), snapshot.FileID)
 	if err != nil {
-		http.Error(w, ErrReadingFile, http.StatusInternalServerError)
+		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return
 	}
-	defer fileContent.Close()
 
-	filename := path.Base(file.WorkspacePath)
+	filename := path.Base(fileMeta.WorkspacePath)
 	mimeHeader := textproto.MIMEHeader{
-		"Content-Type":        []string{file.MimeType},
+		"Content-Type":        []string{fileMeta.MimeType},
 		"Content-Disposition": []string{fmt.Sprintf(`form-data; filename=%q`, filename)},
 	}
-	if !mimeutils.IsText(file.MimeType) {
+	if !mimeutils.IsText(fileMeta.MimeType) {
 		mimeHeader["Content-Transfer-Encoding"] = []string{"base64"}
 	}
 
@@ -359,13 +365,13 @@ func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request
 
 	var writer = filePart
 	// if it is a non text file encode it in base64
-	if !mimeutils.IsText(file.MimeType) {
+	if !mimeutils.IsText(fileMeta.MimeType) {
 		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
 		defer encoder.Close()
 		writer = encoder
 	}
 
-	_, err = io.Copy(writer, fileContent)
+	_, err = writer.Write([]byte(content))
 	if err != nil {
 		http.Error(w, "Error streaming file content", http.StatusInternalServerError)
 		return
@@ -494,20 +500,17 @@ func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, snapshot := range snapshots {
-		err := s.db.DeleteSnapshot(s.ctx, repository.DeleteSnapshotParams{
-			FileID:  snapshot.FileID,
-			Version: snapshot.Version,
-		})
-		if err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-
 		err = s.storage.DeleteObject(snapshot.DiskPath)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
+	}
+
+	err = s.db.DeleteSnapshotsForFile(s.ctx, int64(fileID))
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)

@@ -1,22 +1,28 @@
 -- name: CreateSnapshot :exec
-INSERT INTO snapshots (file_id, version, disk_path, hash, type)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO snapshots (file_id, version, disk_path, type, hash, workspace_id)
+VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: FetchSnapshots :many
-SELECT s.*, f.workspace_id
-FROM snapshots s
-JOIN files f ON f.id = s.file_id
-WHERE s.file_id = ? AND f.workspace_id = ?
-ORDER BY s.version ASC;
+SELECT *
+FROM snapshots
+WHERE file_id = ?
+  AND workspace_id = ?
+ORDER BY created_at, version DESC;
 
--- name: FetchSnapshot :one
-SELECT s.*, f.workspace_id, f.mime_type, f.workspace_path
-FROM snapshots s
-JOIN files f ON f.id = s.file_id
-WHERE s.file_id = ? AND s.version = ? AND f.workspace_id = ?
+-- name: FetchLatestSnapshotForFile :one
+SELECT *
+FROM snapshots
+WHERE file_id = ?
+ORDER BY created_at, version DESC
 LIMIT 1;
 
--- name: DeleteSnapshot :exec
-DELETE FROM operations
-WHERE file_id < ? AND version = ?;
+-- name: FetchSnapshotByVersion :one
+SELECT *
+FROM snapshots
+WHERE file_id = ?
+  AND version = ?
+  AND workspace_id = ?;
 
+-- name: DeleteSnapshotsForFile :exec
+DELETE FROM snapshots
+WHERE file_id = ?;

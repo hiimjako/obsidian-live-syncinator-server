@@ -2,6 +2,7 @@ package syncinator
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,11 +23,11 @@ import (
 type MessageType = int
 
 const (
-	ChunkEventType  MessageType = iota
-	CreateEventType MessageType = iota
-	DeleteEventType MessageType = iota
-	RenameEventType MessageType = iota
-	CursorEventType MessageType = iota
+	ChunkEventType MessageType = iota
+	CreateEventType
+	DeleteEventType
+	RenameEventType
+	CursorEventType
 )
 
 type WsMessageHeader struct {
@@ -132,8 +133,11 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	// need to transform it
 	if data.Version < file.Version {
 		dbOperations, err := s.db.FetchFileOperationsFromVersion(s.ctx, repository.FetchFileOperationsFromVersionParams{
-			FileID:      file.ID,
-			Version:     data.Version,
+
+			FileID: file.ID,
+
+			Version: data.Version,
+
 			WorkspaceID: file.WorkspaceID,
 		})
 		if err != nil {
@@ -409,7 +413,9 @@ func (s *syncinator) writeFileToStorage(file CachedFile) error {
 	hash := filestorage.GenerateHash(fileReader)
 
 	err = s.db.UpdateFileHash(s.ctx, repository.UpdateFileHashParams{
-		ID:   file.ID,
+
+		ID: file.ID,
+
 		Hash: hash,
 	})
 	if err != nil {
@@ -420,7 +426,102 @@ func (s *syncinator) writeFileToStorage(file CachedFile) error {
 }
 
 func (s *syncinator) CreateFileSnapshot(file CachedFile) error {
-	reader := strings.NewReader(file.Content)
+	shouldCreateFullSnapshot := false
+	var baseContent string
+
+	latestSnapshot, err := s.db.FetchLatestSnapshotForFile(s.ctx, file.ID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+
+	if errors.Is(err, sql.ErrNoRows) {
+		shouldCreateFullSnapshot = true
+	} else {
+		if file.Version%s.snapshotCheckpoint == 0 {
+			shouldCreateFullSnapshot = true
+		}
+
+		if !shouldCreateFullSnapshot {
+			snapshots, err := s.db.FetchSnapshots(s.ctx, repository.FetchSnapshotsParams{
+				FileID:      file.ID,
+				WorkspaceID: file.WorkspaceID,
+			})
+			if err != nil {
+				return err
+			}
+
+			consecutiveDiffs := int64(0)
+			for _, snap := range snapshots {
+				if snap.Type == "diff" {
+					consecutiveDiffs++
+				} else {
+					break
+				}
+			}
+
+			if consecutiveDiffs >= s.maxSnapshotDiffChain {
+				shouldCreateFullSnapshot = true
+			}
+		}
+	}
+
+	// Create full snapshot
+	if shouldCreateFullSnapshot {
+		reader := strings.NewReader(file.Content)
+		diskPath, err := s.storage.CreateObject(reader)
+		if err != nil {
+			return err
+		}
+
+		_, err = reader.Seek(0, 0)
+		if err != nil {
+			return err
+		}
+		hash := filestorage.GenerateHash(reader)
+
+		err = s.db.CreateSnapshot(s.ctx, repository.CreateSnapshotParams{
+			FileID:      file.ID,
+			Version:     file.Version,
+			DiskPath:    diskPath,
+			Type:        "file",
+			Hash:        hash,
+			WorkspaceID: file.WorkspaceID,
+		})
+		return err
+	}
+
+	// Create diff snapshot
+	// Need to get the content from the latest snapshot for comparison
+	snapshotReader, err := s.storage.ReadObject(latestSnapshot.DiskPath)
+	if err != nil {
+		return err
+	}
+	defer snapshotReader.Close()
+
+	snapshotContent, err := io.ReadAll(snapshotReader)
+	if err != nil {
+		return err
+	}
+
+	// If latest snapshot is a diff, we need to reconstruct the previous version
+	if latestSnapshot.Type == "diff" {
+		baseContent, err = s.ReconstructSnapshot(file.ID, latestSnapshot.Version, file.WorkspaceID)
+		if err != nil {
+			return err
+		}
+	} else {
+		baseContent = string(snapshotContent)
+	}
+
+	// Compute diff between previous version and current version
+	d := diff.Compute([]rune(baseContent), []rune(file.Content))
+
+	diffJSON, err := json.Marshal(d)
+	if err != nil {
+		return err
+	}
+
+	reader := strings.NewReader(string(diffJSON))
 	diskPath, err := s.storage.CreateObject(reader)
 	if err != nil {
 		return err
@@ -433,14 +534,98 @@ func (s *syncinator) CreateFileSnapshot(file CachedFile) error {
 	hash := filestorage.GenerateHash(reader)
 
 	err = s.db.CreateSnapshot(s.ctx, repository.CreateSnapshotParams{
-		FileID:   file.ID,
-		Version:  file.Version,
-		DiskPath: diskPath,
-		Type:     "file",
-		Hash:     hash,
+		FileID:      file.ID,
+		Version:     file.Version,
+		DiskPath:    diskPath,
+		Type:        "diff",
+		Hash:        hash,
+		WorkspaceID: file.WorkspaceID,
 	})
 
 	return err
+}
+
+func (s *syncinator) ReconstructSnapshot(fileID, version, workspaceID int64) (string, error) {
+	snapshots, err := s.db.FetchSnapshots(s.ctx, repository.FetchSnapshotsParams{
+		FileID:      fileID,
+		WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	// Find the most recent full snapshot at or before the requested version
+	// and collect all diffs that need to be applied
+	var fullSnapshot repository.Snapshot
+	diffSnapshots := make([]repository.Snapshot, 0)
+
+	for _, snapshot := range snapshots {
+		if snapshot.Version > version {
+			continue
+		}
+
+		switch snapshot.Type {
+		case "file":
+			// Found a full snapshot - use it if it's more recent than current base
+			// or if we don't have a base yet
+			if fullSnapshot.DiskPath == "" || fullSnapshot.Version < snapshot.Version {
+				fullSnapshot = snapshot
+				// Clear diffs since we have a new base
+				diffSnapshots = make([]repository.Snapshot, 0)
+			}
+		case "diff":
+			// Only collect diffs that come after the current full snapshot
+			if fullSnapshot.DiskPath != "" && snapshot.Version > fullSnapshot.Version {
+				diffSnapshots = append(diffSnapshots, snapshot)
+			}
+		}
+	}
+
+	// Verify we found a full snapshot
+	if fullSnapshot.DiskPath == "" {
+		return "", errors.New("no full snapshot found")
+	}
+
+	// Read the full snapshot content
+	fileReader, err := s.storage.ReadObject(fullSnapshot.DiskPath)
+	if err != nil {
+		return "", err
+	}
+	defer fileReader.Close()
+
+	fileContent, err := io.ReadAll(fileReader)
+	if err != nil {
+		return "", err
+	}
+
+	content := string(fileContent)
+
+	// Apply diffs in chronological order (oldest to newest)
+	// NOTE: diffSnapshots are in descending order, so we need to reverse
+	for i := len(diffSnapshots) - 1; i >= 0; i-- {
+		snapshot := diffSnapshots[i]
+
+		diffReader, err := s.storage.ReadObject(snapshot.DiskPath)
+		if err != nil {
+			return "", err
+		}
+
+		diffContent, err := io.ReadAll(diffReader)
+		diffReader.Close()
+		if err != nil {
+			return "", err
+		}
+
+		var d []diff.Chunk
+		err = json.Unmarshal(diffContent, &d)
+		if err != nil {
+			return "", err
+		}
+
+		content = diff.ApplyMultiple(content, d)
+	}
+
+	return content, nil
 }
 
 func (s *syncinator) addSubscriber(sub *subscriber) {
@@ -482,7 +667,9 @@ func (s *syncinator) fetchAndCacheFile(fileID int64) (*LockedCachedFile, error) 
 
 		cachedFile := &LockedCachedFile{
 			CachedFile: CachedFile{
-				File:    file,
+
+				File: file,
+
 				Content: string(fileContent),
 			},
 		}
