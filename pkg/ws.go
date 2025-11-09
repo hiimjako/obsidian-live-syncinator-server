@@ -230,13 +230,13 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		return
 	}
 
-	s.broadcastMessage(sender, msgToBroadcast)
-
 	if err := tx.Commit(); err != nil {
 		log.Printf("failed to commit transaction: %v", err)
 		return
 	}
 	committed = true
+
+	s.broadcastMessage(sender, msgToBroadcast)
 }
 
 func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
