@@ -364,7 +364,7 @@ func (s *syncinator) purgeCache() {
 		select {
 		case <-ticker.C:
 			// removing items from operation table
-			err := s.db.DeleteOperationOlderThan(s.ctx, time.Now().Add(-s.cacheMaxAge))
+			err := s.db.DeleteOperationOlderThan(s.ctx, time.Now().Add(-s.operationTTL))
 			if err != nil {
 				log.Println("error while removing old operations", err)
 			}

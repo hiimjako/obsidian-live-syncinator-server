@@ -17,7 +17,7 @@ type EnvVariables struct {
 	StorageDir           string        `env:"STORAGE_DIR,default=./data"`
 	SqliteFilepath       string        `env:"SQLITE_FILEPATH,default=./data/db.sqlite3"`
 	JWTSecret            []byte        `env:"JWT_SECRET,required"`
-	CacheMaxAge          time.Duration `env:"CACHE_MAX_AGE,default=1h"`
+	OperationTTL         time.Duration `env:"OPERATION_TTL,default=1h"`
 	CacheSize            int           `env:"CACHE_SIZE,default=128"`
 	FlushInterval        time.Duration `env:"FLUSH_INTERVAL,default=1m"`
 	MaxFileSizeMB        int64         `env:"MAX_FILE_SIZE,default=1024"`

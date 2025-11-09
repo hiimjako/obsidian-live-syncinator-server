@@ -54,7 +54,7 @@ func run(ev *env.EnvVariables) error {
 
 	handler := syncinator.New(dbSqlite, disk, syncinator.Options{
 		JWTSecret:            ev.JWTSecret,
-		CacheMaxAge:          ev.CacheMaxAge,
+		OperationTTL:         ev.OperationTTL,
 		CacheSize:            ev.CacheSize,
 		MaxFileSizeMB:        ev.MaxFileSizeMB,
 		MinChangesThreshold:  ev.MinChangesThreshold,

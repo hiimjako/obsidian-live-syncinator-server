@@ -26,7 +26,7 @@ const (
 type Options struct {
 	JWTSecret            []byte
 	MaxFileSizeMB        int64
-	CacheMaxAge          time.Duration
+	OperationTTL         time.Duration
 	CacheSize            int
 	MinChangesThreshold  int64
 	FlushInterval        time.Duration
@@ -39,8 +39,8 @@ func (o *Options) Default() {
 		o.MaxFileSizeMB = 1
 	}
 
-	if o.CacheMaxAge <= 0 {
-		o.CacheMaxAge = 0
+	if o.OperationTTL <= 0 {
+		o.OperationTTL = 0
 	}
 
 	if o.CacheSize <= 0 {
@@ -81,7 +81,7 @@ type syncinator struct {
 
 	jwtSecret            []byte
 	maxFileSizeBytes     int64
-	cacheMaxAge          time.Duration
+	operationTTL         time.Duration
 	minChangesThreshold  int64
 	flushInterval        time.Duration
 	snapshotCheckpoint   int64
@@ -109,7 +109,7 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 
 		jwtSecret:            opts.JWTSecret,
 		maxFileSizeBytes:     opts.MaxFileSizeMB << 20,
-		cacheMaxAge:          opts.CacheMaxAge,
+		operationTTL:         opts.OperationTTL,
 		minChangesThreshold:  opts.MinChangesThreshold,
 		flushInterval:        opts.FlushInterval,
 		snapshotCheckpoint:   opts.SnapshotCheckpoint,
