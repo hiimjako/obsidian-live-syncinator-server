@@ -150,7 +150,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		}
 
 		currVersion := data.Version
-		for i := 0; i < len(dbOperations); i++ {
+		for i := range dbOperations {
 			if currVersion+1 != dbOperations[i].Version {
 				log.Printf(
 					"missing operation in history to transform, skipping message. fileId: %v, version: %v, err: %v\n",
@@ -190,7 +190,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	}
 
 	committed := false
-	tx, err := s.conn.Begin()
+	tx, err := s.conn.BeginTx(s.ctx, nil)
 	if err != nil {
 		log.Printf("error opening transaction. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
 		return

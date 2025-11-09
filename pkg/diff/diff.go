@@ -54,7 +54,7 @@ func Compute(oldText, newText []rune) []Chunk {
 
 func ApplyMultiple(text string, chunks []Chunk) string {
 	output := []rune(text)
-	for i := 0; i < len(chunks); i++ {
+	for i := range chunks {
 		output = Apply(output, chunks[i])
 	}
 
@@ -80,15 +80,13 @@ func Apply(text []rune, chunk Chunk) []rune {
 		if len(text) == 0 || chunk.Position >= textLen {
 			return text
 		}
-		endPosition := chunk.Position + chunk.Len
-		if endPosition > textLen {
-			endPosition = textLen
-		}
+		endPosition := min(chunk.Position+chunk.Len, textLen)
 		newText := make([]rune, 0, len(text)-(int(endPosition)-int(chunk.Position)))
 		newText = append(newText, text[:chunk.Position]...)
 		newText = append(newText, text[endPosition:]...)
 		return newText
 	}
+
 	panic("not reachable")
 }
 
@@ -136,6 +134,7 @@ func Transform(op1, op2 Chunk) Chunk {
 			op2.Len = newOp2Len
 		}
 	}
+
 	return op2
 }
 

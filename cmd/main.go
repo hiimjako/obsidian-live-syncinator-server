@@ -43,7 +43,8 @@ func run(ev *env.EnvVariables) error {
 		return err
 	}
 
-	l, err := net.Listen("tcp", net.JoinHostPort(ev.Host, ev.Port))
+	lc := net.ListenConfig{}
+	l, err := lc.Listen(context.Background(), "tcp", net.JoinHostPort(ev.Host, ev.Port))
 	if err != nil {
 		return err
 	}
