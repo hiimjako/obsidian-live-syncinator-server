@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	ApiV1Prefix = "/v1"
+	APIV1Prefix = "/v1"
 
-	PathWebSocket = ApiV1Prefix + "/sync"
-	PathHttpApi   = ApiV1Prefix + "/api"
-	PathHttpAuth  = ApiV1Prefix + "/auth"
+	PathWebSocket = APIV1Prefix + "/sync"
+	PathHTTPAPI   = APIV1Prefix + "/api"
+	PathHTTPAuth  = APIV1Prefix + "/auth"
 )
 
 type Options struct {
@@ -126,8 +126,8 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 
 	s.initCache(opts.CacheSize)
 
-	s.serverMux.Handle(PathHttpApi+"/", http.StripPrefix(PathHttpApi, s.apiHandler()))
-	s.serverMux.Handle(PathHttpAuth+"/", http.StripPrefix(PathHttpAuth, s.authHandler()))
+	s.serverMux.Handle(PathHTTPAPI+"/", http.StripPrefix(PathHTTPAPI, s.apiHandler()))
+	s.serverMux.Handle(PathHTTPAuth+"/", http.StripPrefix(PathHTTPAuth, s.authHandler()))
 	s.serverMux.Handle(PathWebSocket, s.wsHandler())
 
 	go s.processFileChanges()

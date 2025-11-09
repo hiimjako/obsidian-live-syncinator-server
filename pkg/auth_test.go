@@ -34,7 +34,7 @@ func Test_fetchWorkspaceHandler(t *testing.T) {
 		Password: string(hash),
 	}))
 
-	const apiPath = PathHttpAuth + "/login"
+	const apiPath = PathHTTPAuth + "/login"
 
 	t.Run("existing workspace", func(t *testing.T) {
 		data := WorkspaceCredentials{
