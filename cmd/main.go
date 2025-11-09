@@ -53,11 +53,14 @@ func run(ev *env.EnvVariables) error {
 	disk := filestorage.NewDisk(ev.StorageDir)
 
 	handler := syncinator.New(dbSqlite, disk, syncinator.Options{
-		JWTSecret:           ev.JWTSecret,
-		CacheMaxAge:         ev.CacheMaxAge,
-		MaxFileSizeMB:       ev.MaxFileSizeMB,
-		MinChangesThreshold: ev.MinChangesThreshold,
-		FlushInterval:       ev.FlushInterval,
+		JWTSecret:            ev.JWTSecret,
+		CacheMaxAge:          ev.CacheMaxAge,
+		CacheSize:            ev.CacheSize,
+		MaxFileSizeMB:        ev.MaxFileSizeMB,
+		MinChangesThreshold:  ev.MinChangesThreshold,
+		FlushInterval:        ev.FlushInterval,
+		SnapshotCheckpoint:   ev.SnapshotCheckpoint,
+		MaxSnapshotDiffChain: ev.MaxSnapshotDiffChain,
 	})
 	defer handler.Close()
 
