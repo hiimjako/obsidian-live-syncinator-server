@@ -3,12 +3,15 @@ package syncinator
 import (
 	"context"
 	"database/sql"
+	"log"
 	"net/http"
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/hiimjako/syncinator/internal/repository"
 	"github.com/hiimjako/syncinator/pkg/filestorage"
+	"golang.org/x/sync/singleflight"
 	"golang.org/x/time/rate"
 )
 
@@ -24,6 +27,7 @@ type Options struct {
 	JWTSecret           []byte
 	MaxFileSizeMB       int64
 	CacheMaxAge         time.Duration
+	CacheSize           int
 	MinChangesThreshold int64
 	FlushInterval       time.Duration
 }
@@ -35,6 +39,10 @@ func (o *Options) Default() {
 
 	if o.CacheMaxAge <= 0 {
 		o.CacheMaxAge = 0
+	}
+
+	if o.CacheSize <= 0 {
+		o.CacheSize = 128
 	}
 
 	if o.MinChangesThreshold < 0 {
@@ -71,8 +79,8 @@ type syncinator struct {
 	serverMux      *http.ServeMux
 	subscribersMu  sync.Mutex
 	subscribers    map[*subscriber]struct{}
-	filesMu        sync.Mutex
-	files          map[int64]*LockedCachedFile
+	fileCache      *lru.Cache[int64, *LockedCachedFile]
+	loader         *singleflight.Group
 	storage        filestorage.Storage
 	db             *repository.Queries
 	conn           *sql.DB
@@ -96,11 +104,13 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 		serverMux:      http.NewServeMux(),
 		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),
 		subscribers:    make(map[*subscriber]struct{}),
-		files:          make(map[int64]*LockedCachedFile),
+		loader:         &singleflight.Group{},
 		storage:        fs,
 		conn:           db,
 		db:             repo,
 	}
+
+	s.initCache(opts.CacheSize)
 
 	s.serverMux.Handle(PathHttpApi+"/", http.StripPrefix(PathHttpApi, s.apiHandler()))
 	s.serverMux.Handle(PathHttpAuth+"/", http.StripPrefix(PathHttpAuth, s.authHandler()))
@@ -110,6 +120,24 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 	go s.purgeCache()
 
 	return s
+}
+
+func (s *syncinator) initCache(cacheSize int) {
+	onEvicted := func(_ int64, file *LockedCachedFile) {
+		file.mut.Lock()
+		defer file.mut.Unlock()
+
+		err := s.writeFileToStorage(file.CachedFile)
+		if err != nil {
+			log.Printf("error while writing file %d before purge: %v\n", file.ID, err)
+		}
+	}
+
+	fileCache, err := lru.NewWithEvict[int64, *LockedCachedFile](cacheSize, onEvicted)
+	if err != nil {
+		log.Fatalf("error creating lru cache: %v", err)
+	}
+	s.fileCache = fileCache
 }
 
 func (s *syncinator) Close() error {

@@ -113,18 +113,15 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		return
 	}
 
-	s.filesMu.Lock()
-	file, ok := s.files[data.FileID]
+	file, ok := s.fileCache.Get(data.FileID)
 	if !ok {
-		err := s.loadFileInCache(data.FileID)
+		var err error
+		file, err = s.fetchAndCacheFile(data.FileID)
 		if err != nil {
-			s.filesMu.Unlock()
 			log.Printf("error while caching file %v: %v\n", data.FileID, err)
 			return
 		}
-		file = s.files[data.FileID]
 	}
-	s.filesMu.Unlock()
 
 	file.mut.Lock()
 	defer file.mut.Unlock()
@@ -310,40 +307,46 @@ func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
 func (s *syncinator) processFileChanges() {
 	ticker := time.NewTicker(s.flushInterval)
 
-	f := func() {
-		s.filesMu.Lock()
-		for _, file := range s.files {
-			file.mut.Lock()
-			if file.pendingChanges <= 0 {
-				file.mut.Unlock()
-				continue
-			}
-
-			if file.pendingChanges > s.minChangesThreshold ||
-				time.Since(file.UpdatedAt) >= s.flushInterval {
-				err := s.CreateFileSnapshot(file.CachedFile)
-				if err != nil {
-					log.Printf("error while creating snapshot: %v", err)
-				}
-
-				err = s.writeFileToStorage(file.CachedFile)
-				if err != nil {
-					log.Println(err)
-				} else {
-					file.pendingChanges = 0
-				}
-			}
-			file.mut.Unlock()
+	processFile := func(fileId int64) {
+		file, ok := s.fileCache.Get(fileId)
+		if !ok {
+			return
 		}
-		s.filesMu.Unlock()
+
+		file.mut.Lock()
+		defer file.mut.Unlock()
+		if file.pendingChanges <= 0 {
+			return
+		}
+
+		if file.pendingChanges > s.minChangesThreshold ||
+			time.Since(file.UpdatedAt) >= s.flushInterval {
+			err := s.CreateFileSnapshot(file.CachedFile)
+			if err != nil {
+				log.Printf("error while creating snapshot: %v", err)
+			}
+
+			err = s.writeFileToStorage(file.CachedFile)
+			if err != nil {
+				log.Println(err)
+			} else {
+				file.pendingChanges = 0
+			}
+		}
+	}
+
+	processFiles := func() {
+		for _, fileId := range s.fileCache.Keys() {
+			processFile(fileId)
+		}
 	}
 
 	for {
 		select {
 		case <-ticker.C:
-			f()
+			processFiles()
 		case <-s.ctx.Done():
-			f()
+			processFiles()
 			return
 		}
 	}
@@ -351,7 +354,6 @@ func (s *syncinator) processFileChanges() {
 
 // purgeCache is a routine to delete old cached items:
 // - operation from "operations" table
-// - files loaded in memory
 func (s *syncinator) purgeCache() {
 	ticker := time.NewTicker(10 * time.Minute)
 	for {
@@ -363,21 +365,6 @@ func (s *syncinator) purgeCache() {
 				log.Println("error while removing old operations", err)
 			}
 
-			// removing items from files
-			s.filesMu.Lock()
-			for key, file := range s.files {
-				file.mut.Lock()
-				if time.Since(file.UpdatedAt) >= s.cacheMaxAge {
-					err := s.writeFileToStorage(file.CachedFile)
-					if err != nil {
-						log.Printf("error while writing file %d before purge: %v\n", file.ID, err)
-					}
-					delete(s.files, key)
-				}
-				file.mut.Unlock()
-			}
-			s.filesMu.Unlock()
-
 		case <-s.ctx.Done():
 			return
 		}
@@ -385,14 +372,11 @@ func (s *syncinator) purgeCache() {
 }
 
 func (s *syncinator) WriteFileToStorage(fileID int64) error {
-	s.filesMu.Lock()
-	file, ok := s.files[fileID]
+	file, ok := s.fileCache.Get(fileID)
 	if !ok {
-		s.filesMu.Unlock()
 		// not in cache, it means it is already up to date
 		return nil
 	}
-	s.filesMu.Unlock()
 
 	file.mut.Lock()
 	defer file.mut.Unlock()
@@ -472,35 +456,43 @@ func (s *syncinator) deleteSubscriber(sub *subscriber) {
 	s.subscribersMu.Unlock()
 }
 
-// loadFileInCache caches the file from db
-// is not thread safe, it should be called with s.filesMu locked
-func (s *syncinator) loadFileInCache(fileID int64) error {
-	file, err := s.db.FetchFile(s.ctx, fileID)
+// fetchAndCacheFile caches the file from db
+func (s *syncinator) fetchAndCacheFile(fileID int64) (*LockedCachedFile, error) {
+	key := fmt.Sprintf("file-%d", fileID)
+	res, err, _ := s.loader.Do(key, func() (interface{}, error) {
+		file, err := s.db.FetchFile(s.ctx, fileID)
+		if err != nil {
+			return nil, err
+		}
+
+		if !mimeutils.IsText(file.MimeType) {
+			return nil, fmt.Errorf("file %v is not a textfile", file.ID)
+		}
+
+		fileReader, err := s.storage.ReadObject(file.DiskPath)
+		if err != nil {
+			return nil, fmt.Errorf("error while reading file: %w", err)
+		}
+		defer fileReader.Close()
+
+		fileContent, err := io.ReadAll(fileReader)
+		if err != nil {
+			return nil, fmt.Errorf("error while reading file content: %w", err)
+		}
+
+		cachedFile := &LockedCachedFile{
+			CachedFile: CachedFile{
+				File:    file,
+				Content: string(fileContent),
+			},
+		}
+		s.fileCache.Add(file.ID, cachedFile)
+		return cachedFile, nil
+	})
+
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if !mimeutils.IsText(file.MimeType) {
-		return fmt.Errorf("file %v is not a textfile", file.ID)
-	}
-
-	fileReader, err := s.storage.ReadObject(file.DiskPath)
-	if err != nil {
-		log.Panicf("error while reading file, %v\n", err)
-	}
-	defer fileReader.Close()
-
-	fileContent, err := io.ReadAll(fileReader)
-	if err != nil {
-		log.Panicf("error while reading file, %v\n", err)
-	}
-
-	s.files[file.ID] = &LockedCachedFile{
-		CachedFile: CachedFile{
-			File:    file,
-			Content: string(fileContent),
-		},
-	}
-
-	return nil
+	return res.(*LockedCachedFile), nil
 }

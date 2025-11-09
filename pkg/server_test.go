@@ -49,5 +49,5 @@ func TestNew(t *testing.T) {
 	})
 	t.Cleanup(func() { server.Close() })
 
-	assert.Len(t, server.files, 0)
+	assert.Len(t, server.fileCache.Keys(), 0)
 }

@@ -196,9 +196,9 @@ func Test_handleChunk(t *testing.T) {
 		updatedFile, err := handler.db.FetchFile(context.Background(), file.ID)
 		assert.NoError(t, err)
 
-		handler.filesMu.Lock()
-		assert.Equal(t, int64(1), handler.files[file.ID].Version)
-		handler.filesMu.Unlock()
+		fileFromCache, ok := handler.fileCache.Get(file.ID)
+		require.True(t, ok)
+		assert.Equal(t, int64(1), fileFromCache.Version)
 		assert.Equal(t, int64(1), updatedFile.Version)
 		assert.Greater(t, updatedFile.UpdatedAt, file.UpdatedAt)
 		assert.Equal(t, "334d016f755cd6dc58c53a86e183882f8ec14f52fb05345887c8a5edd42c87b7", updatedFile.Hash)
@@ -410,9 +410,9 @@ func Test_handleChunk(t *testing.T) {
 		updatedFile, err := handler.db.FetchFile(context.Background(), file.ID)
 		require.NoError(t, err)
 
-		handler.filesMu.Lock()
-		assert.Equal(t, int64(2), handler.files[file.ID].Version)
-		handler.filesMu.Unlock()
+		fileFromCache, ok := handler.fileCache.Get(file.ID)
+		require.True(t, ok)
+		assert.Equal(t, int64(2), fileFromCache.Version)
 		assert.Equal(t, int64(2), updatedFile.Version)
 
 		// check operation history
@@ -645,11 +645,10 @@ func Test_processFileChanges(t *testing.T) {
 			FlushInterval:       500 * time.Millisecond,
 			MinChangesThreshold: 2,
 		}
-		// processFileChanges is already running. Started in New()
 		handler := New(db, fs, opts)
+		t.Cleanup(func() { handler.Close() })
 
-		handler.filesMu.Lock()
-		handler.files[1] = &LockedCachedFile{
+		handler.fileCache.Add(1, &LockedCachedFile{
 			CachedFile: CachedFile{
 				pendingChanges: 1,
 				Content:        "foo",
@@ -661,8 +660,7 @@ func Test_processFileChanges(t *testing.T) {
 					UpdatedAt:   time.Now(),
 				},
 			},
-		}
-		handler.filesMu.Unlock()
+		})
 
 		time.Sleep(200 * time.Millisecond)
 
@@ -686,8 +684,10 @@ func Test_processFileChanges(t *testing.T) {
 			FlushInterval:       100 * time.Millisecond,
 			MinChangesThreshold: 2,
 		}
+
 		// processFileChanges is already running. Started in New()
 		handler := New(db, fs, opts)
+		t.Cleanup(func() { handler.Close() })
 
 		filename := "file.md"
 
@@ -701,8 +701,7 @@ func Test_processFileChanges(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		handler.filesMu.Lock()
-		handler.files[1] = &LockedCachedFile{
+		handler.fileCache.Add(1, &LockedCachedFile{
 			CachedFile: CachedFile{
 				pendingChanges: 3,
 				Content:        "foo",
@@ -711,11 +710,10 @@ func Test_processFileChanges(t *testing.T) {
 					Version:     1,
 					DiskPath:    filename,
 					WorkspaceID: 1,
-					UpdatedAt:   time.Now().Add(1 * time.Hour),
+					UpdatedAt:   time.Now(),
 				},
 			},
-		}
-		handler.filesMu.Unlock()
+		})
 		time.Sleep(2 * opts.FlushInterval)
 
 		// check file write
@@ -752,11 +750,11 @@ func Test_processFileChanges(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "foo", string(sFileContent))
 
-		handler.filesMu.Lock()
-		handler.files[1].mut.Lock()
-		assert.EqualValues(t, 0, handler.files[1].pendingChanges)
-		handler.files[1].mut.Unlock()
-		handler.filesMu.Unlock()
+		fileFromCache, ok := handler.fileCache.Get(1)
+		require.True(t, ok)
+		fileFromCache.mut.Lock()
+		assert.EqualValues(t, 0, fileFromCache.pendingChanges)
+		fileFromCache.mut.Unlock()
 	})
 
 	t.Run("should write file to storage and save snapshot after time elapsed", func(t *testing.T) {
@@ -771,6 +769,7 @@ func Test_processFileChanges(t *testing.T) {
 		}
 		// processFileChanges is already running. Started in New()
 		handler := New(db, fs, opts)
+		t.Cleanup(func() { handler.Close() })
 
 		filename := "file.md"
 
@@ -784,8 +783,7 @@ func Test_processFileChanges(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		handler.filesMu.Lock()
-		handler.files[1] = &LockedCachedFile{
+		handler.fileCache.Add(1, &LockedCachedFile{
 			CachedFile: CachedFile{
 				pendingChanges: 1,
 				Content:        "foo",
@@ -797,8 +795,7 @@ func Test_processFileChanges(t *testing.T) {
 					UpdatedAt:   time.Now().Add(-1 * time.Hour),
 				},
 			}, // Added closing brace for CachedFile
-		}
-		handler.filesMu.Unlock()
+		})
 		time.Sleep(2 * opts.FlushInterval)
 
 		// check file write
@@ -835,11 +832,11 @@ func Test_processFileChanges(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "foo", string(sFileContent))
 
-		handler.filesMu.Lock()
-		handler.files[1].mut.Lock()
-		assert.EqualValues(t, 0, handler.files[1].pendingChanges)
-		handler.files[1].mut.Unlock()
-		handler.filesMu.Unlock()
+		fileFromCache, ok := handler.fileCache.Get(1)
+		require.True(t, ok)
+		fileFromCache.mut.Lock()
+		assert.EqualValues(t, 0, fileFromCache.pendingChanges)
+		fileFromCache.mut.Unlock()
 	})
 }
 
