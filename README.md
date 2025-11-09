@@ -56,6 +56,34 @@ volumes:
 GOOSE_DRIVER=sqlite GOOSE_MIGRATION_DIR=./internal/migration/migrations/ goose create new_migration_name sql
 ```
 
+# Synchronization Logic
+
+The synchronization of text files between clients is achieved using a central server and the Operational Transformation (OT) algorithm.
+This ensures that all clients converge eventually to the same document state, even when multiple users are making changes concurrently.
+
+## Architecture
+
+The system follows a client-server architecture:
+
+- **Server:** A central, authoritative server that manages the document state and orchestrates the synchronization process.
+- **Clients:** Each client (e.g., the Obsidian plugin) maintains a local copy of the document and communicates with the server to send and receive changes.
+
+## Synchronization Process
+
+1. **Client Sends Changes:** When a user modifies a document, the client computes the changes as a set of operations (insertions and deletions) and sends them to the server along with the current version of the document it is based on.
+2. **Server Receives and Transforms Changes:**
+   - The server receives the operations from the client.
+   - It checks the version number of the incoming operations. If the version is older than the server's current version of the document, it means other clients have made changes in the meantime.
+   - The server then transforms the incoming operations against the operations that have been applied since the client's version. This is the core of the OT algorithm, ensuring that the client's changes are correctly applied to the current state of the document.
+3. **Server Applies and Broadcasts Changes:**
+   - After transformation, the server applies the new operations to its copy of the document and increments its version number.
+   - The server then broadcasts the transformed operations to all other connected clients.
+4. **Clients Receive and Apply Changes:**
+   - Other clients receive the broadcasted operations from the server.
+   - They apply these operations to their local copy of the document, ensuring that they stay in sync with the server.
+
+This process guarantees that all clients will eventually have the same content, resolving conflicts in a consistent and predictable manner.
+
 # Disclaimer
 
 This is recreational software provided as-is, without any warranty. While the plugin is functional, I do not assume any responsibility for potential data loss or other issues that may arise from its use. Always maintain backups of your important data before using any synchronization tools.
