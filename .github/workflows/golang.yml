@@ -20,7 +20,7 @@ jobs:
     outputs:
       files_changed: ${{ steps.filter.outputs.go == 'true' || steps.filter.outputs.scripts == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 
       - uses: dorny/paths-filter@v3
@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ needs.changes.outputs.files_changed == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0  
       - name: Set up Go
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ needs.changes.outputs.files_changed == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0  
       - name: Set up Go
