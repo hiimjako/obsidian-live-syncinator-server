@@ -170,7 +170,7 @@ func (s *syncinator) listOperationsHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	fileID, err := strconv.Atoi(r.URL.Query().Get("fileId"))
-	if fromVersion < 0 || err != nil {
+	if fileID < 0 || err != nil {
 		http.Error(w, "invalid \"fileId\"", http.StatusBadRequest)
 		return
 	}

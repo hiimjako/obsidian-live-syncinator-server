@@ -907,6 +907,24 @@ func Test_listOperationsHandler(t *testing.T) {
 	}, body[0])
 }
 
+func Test_listOperationsHandler_invalidFileID(t *testing.T) {
+	mockFileStorage := new(filestorage.MockFileStorage)
+	db := testutils.CreateDB(t)
+	options := Options{JWTSecret: []byte("secret")}
+	server := New(db, mockFileStorage, options)
+	t.Cleanup(func() { server.Close() })
+
+	res, _ := testutils.DoRequest[string](
+		t,
+		server,
+		http.MethodGet,
+		PathHTTPAPI+"/operation?from=0&fileId=-1",
+		nil,
+		testutils.WithAuthHeader(options.JWTSecret, 1),
+	)
+	assert.Equal(t, http.StatusBadRequest, res.Code)
+}
+
 // Test_listSnapshotsHandler tests the listSnapshotsHandler using mocked storage
 func Test_listSnapshotsHandler(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
