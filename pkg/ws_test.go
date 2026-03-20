@@ -106,8 +106,12 @@ func Test_handleChunk(t *testing.T) {
 		opts := Options{JWTSecret: []byte("secret"), FlushInterval: time.Second}
 		handler := New(db, fs, opts)
 		ts := httptest.NewServer(handler)
-
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		t.Cleanup(func() {
+			cancel()
+			ts.Close()
+			handler.Close()
+		})
 
 		var workspaceID1 int64 = 1
 		var workspaceID2 int64 = 2
@@ -221,15 +225,6 @@ func Test_handleChunk(t *testing.T) {
 			Operation: marshal(t, msg.Chunks),
 			CreatedAt: operations[0].CreatedAt,
 		}, operations[0])
-
-		t.Cleanup(func() {
-			cancel()
-			senderWorkspace1.Close(websocket.StatusNormalClosure, "")
-			receiverWorkspace1.Close(websocket.StatusNormalClosure, "")
-			receiverWorkspace2.Close(websocket.StatusNormalClosure, "")
-			ts.Close()
-			handler.Close()
-		})
 	})
 
 	t.Run("should transform concurrent or older chunk", func(t *testing.T) {
@@ -255,8 +250,12 @@ func Test_handleChunk(t *testing.T) {
 		authOptions := Options{JWTSecret: []byte("secret")}
 		handler := New(db, fs, authOptions)
 		ts := httptest.NewServer(handler)
-
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		t.Cleanup(func() {
+			cancel()
+			ts.Close()
+			handler.Close()
+		})
 
 		urlWorkspace := createWsURLWithAuth(t, ts.URL, workspaceID, authOptions.JWTSecret)
 
@@ -456,14 +455,6 @@ func Test_handleChunk(t *testing.T) {
 				CreatedAt: operations[1].CreatedAt,
 			},
 		}, operations)
-
-		t.Cleanup(func() {
-			cancel()
-			client1.Close(websocket.StatusNormalClosure, "")
-			client2.Close(websocket.StatusNormalClosure, "")
-			ts.Close()
-			handler.Close()
-		})
 	})
 }
 
