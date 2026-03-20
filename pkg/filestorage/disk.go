@@ -28,7 +28,8 @@ func (d Disk) CreateObject(file io.Reader) (string, error) {
 		diskPath := filepath.Join(d.basepath, relativePath)
 
 		_, err := os.Stat(diskPath)
-		if os.IsExist(err) {
+		if err == nil {
+			// file already exists, retry with a new UUID
 			continue
 		}
 
