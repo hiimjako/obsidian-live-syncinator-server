@@ -154,10 +154,9 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		for i := range dbOperations {
 			if currVersion+1 != dbOperations[i].Version {
 				log.Printf(
-					"missing operation in history to transform, skipping message. fileId: %v, version: %v, err: %v\n",
+					"missing operation in history to transform, skipping message. fileId: %v, version: %v\n",
 					data.FileID,
 					data.Version,
-					err,
 				)
 				return
 			}
