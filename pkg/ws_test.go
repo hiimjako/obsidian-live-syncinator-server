@@ -948,6 +948,101 @@ func TestOnChunkMessage_DoesNotMutateInMemoryStateOnDBFailure(t *testing.T) {
 	assert.Equal(t, int64(0), cached.pendingChanges, "pendingChanges should not be incremented on DB failure")
 }
 
+func TestReconstructSnapshot_AppliesDiffsInOrder(t *testing.T) {
+	dir := t.TempDir()
+	fs := filestorage.NewDisk(dir)
+	db := testutils.CreateDB(t)
+	repo := repository.New(db)
+
+	var workspaceID int64 = 1
+
+	// Create a file in DB
+	file, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath:      "ignored",
+		WorkspacePath: "test.md",
+		MimeType:      "text/plain",
+		Hash:          "h",
+		WorkspaceID:   workspaceID,
+	})
+	require.NoError(t, err)
+
+	// Write base snapshot content to storage
+	basePath, err := fs.CreateObject(strings.NewReader("hello"))
+	require.NoError(t, err)
+
+	// Create base snapshot at version 1
+	err = repo.CreateSnapshot(context.Background(), repository.CreateSnapshotParams{
+		FileID:      file.ID,
+		Version:     1,
+		DiskPath:    basePath,
+		Type:        "file",
+		Hash:        "base",
+		WorkspaceID: workspaceID,
+	})
+	require.NoError(t, err)
+
+	// SQLite timestamp precision is 1 second; ensure snapshots get distinct created_at
+	time.Sleep(1100 * time.Millisecond)
+
+	// Create diff v2: "hello" -> "hello world"
+	diffChunks2 := []diff.Chunk{{Position: 5, Type: diff.Add, Text: " world", Len: 6}}
+	diffJSON2, err := json.Marshal(diffChunks2)
+	require.NoError(t, err)
+	diffPath2, err := fs.CreateObject(strings.NewReader(string(diffJSON2)))
+	require.NoError(t, err)
+
+	err = repo.CreateSnapshot(context.Background(), repository.CreateSnapshotParams{
+		FileID:      file.ID,
+		Version:     2,
+		DiskPath:    diffPath2,
+		Type:        "diff",
+		Hash:        "d2",
+		WorkspaceID: workspaceID,
+	})
+	require.NoError(t, err)
+
+	time.Sleep(1100 * time.Millisecond)
+
+	// Create diff v3: "hello world" -> "hello world!"
+	diffChunks3 := []diff.Chunk{{Position: 11, Type: diff.Add, Text: "!", Len: 1}}
+	diffJSON3, err := json.Marshal(diffChunks3)
+	require.NoError(t, err)
+	diffPath3, err := fs.CreateObject(strings.NewReader(string(diffJSON3)))
+	require.NoError(t, err)
+
+	err = repo.CreateSnapshot(context.Background(), repository.CreateSnapshotParams{
+		FileID:      file.ID,
+		Version:     3,
+		DiskPath:    diffPath3,
+		Type:        "diff",
+		Hash:        "d3",
+		WorkspaceID: workspaceID,
+	})
+	require.NoError(t, err)
+
+	opts := Options{JWTSecret: []byte("secret"), FlushInterval: time.Hour}
+	handler := New(db, fs, opts)
+	t.Cleanup(func() { handler.Close() })
+
+	t.Run("reconstruct at version with diffs", func(t *testing.T) {
+		content, err := handler.ReconstructSnapshot(file.ID, 3, workspaceID)
+		require.NoError(t, err)
+		assert.Equal(t, "hello world!", content)
+	})
+
+	t.Run("reconstruct at intermediate version", func(t *testing.T) {
+		content, err := handler.ReconstructSnapshot(file.ID, 2, workspaceID)
+		require.NoError(t, err)
+		assert.Equal(t, "hello world", content)
+	})
+
+	t.Run("reconstruct at base version", func(t *testing.T) {
+		content, err := handler.ReconstructSnapshot(file.ID, 1, workspaceID)
+		require.NoError(t, err)
+		assert.Equal(t, "hello", content)
+	})
+}
+
 func Benchmark_onChunkMessage(b *testing.B) {
 	log.SetOutput(io.Discard)
 
