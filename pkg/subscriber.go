@@ -101,7 +101,7 @@ func (s *subscriber) Listen() {
 			if err != nil {
 				s.checkWsError(err)
 				s.Close()
-				continue
+				return
 			}
 
 			msgType, err := s.MessageType(msg)
