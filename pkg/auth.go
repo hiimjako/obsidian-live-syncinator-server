@@ -77,7 +77,7 @@ func (s *syncinator) fetchWorkspaceHandler(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "error reading request body", http.StatusInternalServerError)
+		http.Error(w, "error writing response", http.StatusInternalServerError)
 		return
 	}
 }
