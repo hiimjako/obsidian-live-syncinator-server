@@ -52,7 +52,7 @@ func (d Disk) CreateObject(file io.Reader) (string, error) {
 		}
 
 		dir := filepath.Dir(diskPath)
-		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		if err := os.MkdirAll(dir, 0750); err != nil {
 			return "", err
 		}
 
