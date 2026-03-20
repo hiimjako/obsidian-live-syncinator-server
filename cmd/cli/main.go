@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"flag"
 	"fmt"
@@ -11,12 +10,6 @@ import (
 	"github.com/hiimjako/syncinator/internal/repository"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
-)
-
-const (
-	saltSize   = 16    // Size of salt in bytes
-	hashIter   = 10000 // Number of PBKDF2 iterations
-	hashKeyLen = 32    // Length of generated key in bytes
 )
 
 func main() {
@@ -44,10 +37,6 @@ func main() {
 	failOnError(err)
 
 	db := repository.New(dbSqlite)
-
-	salt := make([]byte, saltSize)
-	_, err = rand.Read(salt)
-	failOnError(err)
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(*workspacePass), bcrypt.DefaultCost)
 	failOnError(err)
