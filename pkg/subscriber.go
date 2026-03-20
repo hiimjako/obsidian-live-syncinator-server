@@ -130,14 +130,14 @@ func (s *subscriber) Listen() {
 
 				s.onEventMessage(s, event)
 			case CursorEventType:
-				var curosr CursorMessage
-				err := mapToStruct(msg, &curosr)
+				var cursor CursorMessage
+				err := mapToStruct(msg, &cursor)
 				if err != nil {
 					log.Println(err)
 					continue
 				}
 
-				s.onCursorMessage(s, curosr)
+				s.onCursorMessage(s, cursor)
 			}
 		}
 	}()
