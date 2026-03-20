@@ -414,7 +414,10 @@ func (s *syncinator) writeFileToStorage(file CachedFile) error {
 	}
 
 	fileReader := strings.NewReader(file.Content)
-	hash := filestorage.GenerateHash(fileReader)
+	hash, err := filestorage.GenerateHash(fileReader)
+	if err != nil {
+		return err
+	}
 
 	err = s.db.UpdateFileHash(s.ctx, repository.UpdateFileHashParams{
 
@@ -481,7 +484,10 @@ func (s *syncinator) CreateFileSnapshot(file CachedFile) error {
 		if err != nil {
 			return err
 		}
-		hash := filestorage.GenerateHash(reader)
+		hash, err := filestorage.GenerateHash(reader)
+		if err != nil {
+			return err
+		}
 
 		err = s.db.CreateSnapshot(s.ctx, repository.CreateSnapshotParams{
 			FileID:      file.ID,
@@ -535,7 +541,10 @@ func (s *syncinator) CreateFileSnapshot(file CachedFile) error {
 	if err != nil {
 		return err
 	}
-	hash := filestorage.GenerateHash(reader)
+	hash, err := filestorage.GenerateHash(reader)
+	if err != nil {
+		return err
+	}
 
 	err = s.db.CreateSnapshot(s.ctx, repository.CreateSnapshotParams{
 		FileID:      file.ID,

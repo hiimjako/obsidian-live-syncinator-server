@@ -436,7 +436,11 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mimeType := requestutils.DetectFileMimeType(fileReader)
-	hash := filestorage.GenerateHash(fileReader)
+	hash, err := filestorage.GenerateHash(fileReader)
+	if err != nil {
+		http.Error(w, ErrInvalidFile, http.StatusInternalServerError)
+		return
+	}
 
 	dbFile, err := s.db.CreateFile(r.Context(), repository.CreateFileParams{
 		DiskPath:      diskPath,

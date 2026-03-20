@@ -3,6 +3,7 @@ package filestorage
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 )
 
@@ -17,11 +18,11 @@ type Storage interface {
 	ReadObject(string) (io.ReadCloser, error)
 }
 
-func GenerateHash(file io.Reader) string {
+func GenerateHash(file io.Reader) (string, error) {
 	hash := sha256.New()
 	_, err := io.Copy(hash, file)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("failed to generate hash: %w", err)
 	}
-	return hex.EncodeToString(hash.Sum(nil))
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
