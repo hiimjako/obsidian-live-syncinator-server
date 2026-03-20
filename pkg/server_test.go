@@ -28,6 +28,12 @@ func TestClose_CancelsContext(t *testing.T) {
 	assert.Equal(t, context.Canceled, server.ctx.Err())
 }
 
+func TestOptionsDefault_ZeroMinChangesThreshold(t *testing.T) {
+	opts := Options{}
+	opts.Default()
+	assert.Greater(t, opts.MinChangesThreshold, int64(0))
+}
+
 func TestNew(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
 	db := testutils.CreateDB(t)
