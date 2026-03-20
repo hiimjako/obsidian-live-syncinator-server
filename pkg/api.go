@@ -387,6 +387,9 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to parse form", http.StatusBadRequest)
 		return
 	}
+	if r.MultipartForm != nil {
+		defer func() { _ = r.MultipartForm.RemoveAll() }()
+	}
 
 	file, header, err := r.FormFile(MultipartFileField)
 	if err != nil {
