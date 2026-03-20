@@ -438,6 +438,33 @@ func Test_createFileHandler(t *testing.T) {
 		mockFileStorage.AssertNumberOfCalls(t, "CreateObject", 1)
 	})
 
+	t.Run("should return 500 on unexpected DB error during duplicate check", func(t *testing.T) {
+		mockFileStorage := new(filestorage.MockFileStorage)
+		db := testutils.CreateDB(t)
+		options := Options{JWTSecret: []byte("secret")}
+		server := New(db, mockFileStorage, options)
+		t.Cleanup(func() { server.Close() })
+
+		var workspaceID int64 = 10
+
+		// Close the underlying DB connection to trigger a non-ErrNoRows error
+		db.Close()
+
+		form, contentType := testutils.CreateMultipart(t, "/new/path", []byte("content"), false)
+		res, _ := testutils.DoRequest[string](
+			t,
+			server,
+			http.MethodPost,
+			PathHTTPAPI+"/file",
+			form,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+			testutils.WithContentTypeHeader(contentType),
+		)
+		assert.Equal(t, http.StatusInternalServerError, res.Code)
+
+		mockFileStorage.AssertNotCalled(t, "CreateObject")
+	})
+
 	t.Run("should insert same path on different workspaces", func(t *testing.T) {
 		mockFileStorage := new(filestorage.MockFileStorage)
 		db := testutils.CreateDB(t)

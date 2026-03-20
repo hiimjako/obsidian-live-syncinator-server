@@ -3,8 +3,10 @@ package syncinator
 import (
 	"archive/zip"
 	"bytes"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -406,6 +408,10 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 	})
 	if err == nil {
 		http.Error(w, ErrDuplicateFile, http.StatusConflict)
+		return
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
