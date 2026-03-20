@@ -63,6 +63,11 @@ func ApplyMultiple(text string, chunks []Chunk) string {
 
 func Apply(text []rune, chunk Chunk) []rune {
 	textLen := int64(len(text))
+
+	if chunk.Position < 0 {
+		chunk.Position = 0
+	}
+
 	switch chunk.Type {
 	case Add:
 		if chunk.Position > textLen {

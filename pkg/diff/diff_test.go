@@ -3,6 +3,8 @@ package diff
 import (
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTransform(t *testing.T) {
@@ -103,6 +105,18 @@ func TestTransform(t *testing.T) {
 		if got := Transform(op1, op2); !reflect.DeepEqual(got, exp) {
 			t.Errorf("Transform() = %v, want %v", got, exp)
 		}
+	})
+}
+
+func TestApply_NegativePosition(t *testing.T) {
+	text := []rune("hello world")
+
+	assert.NotPanics(t, func() {
+		Apply(text, Chunk{Type: Add, Position: -1, Text: "x", Len: 1})
+	})
+
+	assert.NotPanics(t, func() {
+		Apply(text, Chunk{Type: Remove, Position: -5, Text: "hello", Len: 5})
 	})
 }
 
