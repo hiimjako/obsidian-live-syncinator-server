@@ -31,16 +31,16 @@ func DetectFileMimeType(file io.ReadSeeker) string {
 	buf := make([]byte, 512)
 	n, err := file.Read(buf)
 	if err != nil {
-		return defaultTextType
+		return defaultContentType
 	}
 
 	_, err = file.Seek(0, io.SeekStart)
 	if err != nil {
-		return defaultTextType
+		return defaultContentType
 	}
 
 	detectedContentType := http.DetectContentType(buf[:n])
-	if detectedContentType == defaultContentType && utf8.Valid(buf) {
+	if detectedContentType == defaultContentType && utf8.Valid(buf[:n]) {
 		return defaultTextType
 	}
 
