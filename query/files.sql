@@ -54,7 +54,8 @@ WHERE id = ?;
 
 -- name: UpdateFileHash :exec
 UPDATE files
-SET 
-    hash = ?
+SET
+    hash = ?,
+    updated_at = CURRENT_TIMESTAMP
 WHERE id = ?;
 

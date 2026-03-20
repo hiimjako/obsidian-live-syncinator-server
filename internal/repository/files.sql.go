@@ -266,8 +266,9 @@ func (q *Queries) FetchWorkspaceFiles(ctx context.Context, workspaceID int64) ([
 
 const updateFileHash = `-- name: UpdateFileHash :exec
 UPDATE files
-SET 
-    hash = ?
+SET
+    hash = ?,
+    updated_at = CURRENT_TIMESTAMP
 WHERE id = ?
 `
 

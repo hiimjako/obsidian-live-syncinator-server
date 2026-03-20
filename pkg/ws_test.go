@@ -842,6 +842,33 @@ func marshal(t *testing.T, thing any) string {
 	return string(j)
 }
 
+func TestUpdateFileHash_UpdatesTimestamp(t *testing.T) {
+	db := testutils.CreateDB(t)
+	repo := repository.New(db)
+
+	file, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath:      "dp",
+		WorkspacePath: "wp",
+		MimeType:      "text/plain",
+		Hash:          "old_hash",
+		WorkspaceID:   1,
+	})
+	require.NoError(t, err)
+
+	time.Sleep(1100 * time.Millisecond)
+
+	err = repo.UpdateFileHash(context.Background(), repository.UpdateFileHashParams{
+		ID:   file.ID,
+		Hash: "new_hash",
+	})
+	require.NoError(t, err)
+
+	updated, err := repo.FetchFile(context.Background(), file.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "new_hash", updated.Hash)
+	assert.Greater(t, updated.UpdatedAt, file.UpdatedAt)
+}
+
 func TestFetchLatestSnapshotForFile_ReturnsNewest(t *testing.T) {
 	db := testutils.CreateDB(t)
 	repo := repository.New(db)
