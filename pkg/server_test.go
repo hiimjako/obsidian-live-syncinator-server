@@ -28,6 +28,29 @@ func TestClose_CancelsContext(t *testing.T) {
 	assert.Equal(t, context.Canceled, server.ctx.Err())
 }
 
+func TestUniqueConstraint_WorkspaceIdAndPath(t *testing.T) {
+	db := testutils.CreateDB(t)
+	repo := repository.New(db)
+
+	_, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath: "disk1", WorkspacePath: "/same/path", MimeType: "text/plain",
+		Hash: "h1", WorkspaceID: 1,
+	})
+	require.NoError(t, err)
+
+	_, err = repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath: "disk2", WorkspacePath: "/same/path", MimeType: "text/plain",
+		Hash: "h2", WorkspaceID: 1,
+	})
+	assert.Error(t, err, "same workspace_id + workspace_path should violate UNIQUE constraint")
+
+	_, err = repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath: "disk3", WorkspacePath: "/same/path", MimeType: "text/plain",
+		Hash: "h3", WorkspaceID: 2,
+	})
+	assert.NoError(t, err, "same workspace_path in different workspace should be allowed")
+}
+
 func TestNew(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
 	db := testutils.CreateDB(t)
