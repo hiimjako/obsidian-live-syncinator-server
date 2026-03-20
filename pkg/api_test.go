@@ -716,6 +716,50 @@ func Test_deleteFileHandler(t *testing.T) {
 		assert.Len(t, snapshots, 1, "snapshot DB record should be preserved on storage failure")
 	})
 
+	t.Run("delete evicts file from cache", func(t *testing.T) {
+		dir := t.TempDir()
+		realStorage := filestorage.NewDisk(dir)
+		db := testutils.CreateDB(t)
+		options := Options{JWTSecret: []byte("secret"), FlushInterval: time.Hour}
+		server := New(db, realStorage, options)
+		t.Cleanup(func() { server.Close() })
+
+		var workspaceID int64 = 10
+		filepath := "/home/cached-file"
+		content := []byte("cached content")
+
+		diskPath, err := realStorage.CreateObject(strings.NewReader(string(content)))
+		require.NoError(t, err)
+
+		file, err := server.db.CreateFile(context.Background(), repository.CreateFileParams{
+			DiskPath:      diskPath,
+			WorkspacePath: filepath,
+			MimeType:      "text/plain; charset=utf-8",
+			Hash:          "h",
+			WorkspaceID:   workspaceID,
+		})
+		require.NoError(t, err)
+
+		// Simulate cached file with pending changes
+		server.fileCache.Add(file.ID, &LockedCachedFile{
+			CachedFile: CachedFile{
+				File:           file,
+				Content:        "modified content",
+				pendingChanges: 5,
+			},
+		})
+
+		res, _ := testutils.DoRequest[string](
+			t, server, http.MethodDelete,
+			PathHTTPAPI+"/file/"+strconv.Itoa(int(file.ID)), nil,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+		)
+		assert.Equal(t, http.StatusNoContent, res.Code)
+
+		_, ok := server.fileCache.Get(file.ID)
+		assert.False(t, ok, "file should be evicted from cache after delete")
+	})
+
 	t.Run("unauthorize to delete a file of other workspace", func(t *testing.T) {
 		mockFileStorage := new(filestorage.MockFileStorage)
 		db := testutils.CreateDB(t)

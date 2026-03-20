@@ -480,6 +480,13 @@ func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if cached, ok := s.fileCache.Get(file.ID); ok {
+		cached.mut.Lock()
+		cached.pendingChanges = 0
+		cached.mut.Unlock()
+		s.fileCache.Remove(file.ID)
+	}
+
 	snapshots, err := s.db.FetchSnapshots(r.Context(), repository.FetchSnapshotsParams{
 		FileID:      int64(fileID),
 		WorkspaceID: workspaceID,
