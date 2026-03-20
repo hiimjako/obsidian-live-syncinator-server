@@ -41,7 +41,9 @@ func TestIsAuthenticated(t *testing.T) {
 			rec := httptest.NewRecorder()
 
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				assert.Equal(t, expectedWorkspaceID, WorkspaceIDFromCtx(r.Context()))
+				wid, ok := WorkspaceIDFromCtx(r.Context())
+				assert.True(t, ok)
+				assert.Equal(t, expectedWorkspaceID, wid)
 				w.WriteHeader(http.StatusOK)
 			})
 
@@ -107,7 +109,15 @@ func TestCreateToken_NeverReturnsEmptyTokenWithNilError(t *testing.T) {
 func TestWorkspaceIDFromCtx(t *testing.T) {
 	expectedWorkspaceID := int64(10)
 	ctx := context.WithValue(context.Background(), AuthWorkspaceID, int64(10))
-	workspaceID := WorkspaceIDFromCtx(ctx)
+	workspaceID, ok := WorkspaceIDFromCtx(ctx)
 
+	assert.True(t, ok)
 	assert.Equal(t, expectedWorkspaceID, workspaceID)
+}
+
+func TestWorkspaceIDFromCtx_MissingValue(t *testing.T) {
+	assert.NotPanics(t, func() {
+		_, ok := WorkspaceIDFromCtx(context.Background())
+		assert.False(t, ok)
+	})
 }

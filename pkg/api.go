@@ -75,7 +75,7 @@ func (s *syncinator) apiHandler() http.Handler {
 }
 
 func (s *syncinator) exportHandler(w http.ResponseWriter, r *http.Request) {
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 
 	files, err := s.db.FetchFiles(r.Context(), workspaceID)
 	if err != nil {
@@ -120,7 +120,7 @@ func (s *syncinator) exportHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *syncinator) listFilesHandler(w http.ResponseWriter, r *http.Request) {
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 
 	files, err := s.db.FetchFiles(r.Context(), workspaceID)
 	if err != nil {
@@ -144,7 +144,7 @@ func (s *syncinator) listFileSnapshotsHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 	files, err := s.db.FetchSnapshots(r.Context(), repository.FetchSnapshotsParams{
 		FileID:      int64(fileID),
 		WorkspaceID: workspaceID,
@@ -175,7 +175,7 @@ func (s *syncinator) listOperationsHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 	dbOperations, err := s.db.FetchFileOperationsFromVersion(r.Context(), repository.FetchFileOperationsFromVersionParams{
 		FileID:      int64(fileID),
 		Version:     int64(fromVersion),
@@ -224,7 +224,7 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 	if file.WorkspaceID != workspaceID {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return
@@ -305,7 +305,7 @@ func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 	snapshot, err := s.db.FetchSnapshotByVersion(r.Context(), repository.FetchSnapshotByVersionParams{
 		FileID:      int64(fileID),
 		Version:     int64(snapshotVersion),
@@ -379,7 +379,7 @@ func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 
 	if !requestutils.IsMultipartFormData(r) {
 		errMsg := fmt.Sprintf("Unsupported Content-Type %q", r.Header.Get("Content-Type"))
@@ -477,7 +477,7 @@ func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 	if file.WorkspaceID != workspaceID {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return
@@ -551,7 +551,7 @@ func (s *syncinator) updateFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 	if file.WorkspaceID != workspaceID {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return

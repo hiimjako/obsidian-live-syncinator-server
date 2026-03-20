@@ -50,7 +50,7 @@ func NewSubscriber(
 	}
 
 	const subscriberMessageBuffer = 8
-	workspaceID := middleware.WorkspaceIDFromCtx(r.Context())
+	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 
 	s := &subscriber{
 		conn:           c,

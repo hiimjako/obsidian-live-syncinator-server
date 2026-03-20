@@ -126,6 +126,7 @@ func VerifyToken(ao AuthOptions, tokenString string) (int64, error) {
 	return int64(sub), nil
 }
 
-func WorkspaceIDFromCtx(ctx context.Context) int64 {
-	return ctx.Value(AuthWorkspaceID).(int64)
+func WorkspaceIDFromCtx(ctx context.Context) (int64, bool) {
+	val, ok := ctx.Value(AuthWorkspaceID).(int64)
+	return val, ok
 }
