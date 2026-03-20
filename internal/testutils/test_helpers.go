@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -81,7 +82,7 @@ func DoRequest[T any](
 		reqBody = bytes.NewBuffer(reqBodyBytes)
 	}
 
-	req := httptest.NewRequest(method, url, reqBody)
+	req := httptest.NewRequestWithContext(context.Background(), method, url, reqBody)
 	for _, opt := range options {
 		require.NoError(t, opt(req))
 	}

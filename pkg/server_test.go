@@ -28,7 +28,6 @@ func TestClose_CancelsContext(t *testing.T) {
 	assert.Equal(t, context.Canceled, server.ctx.Err())
 }
 
-
 func TestNew(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
 	db := testutils.CreateDB(t)

@@ -83,7 +83,7 @@ func (s *subscriber) IsConnected() bool {
 }
 
 func (s *subscriber) Close() error {
-	log.Printf("client %s (%d) disconnected\n", s.clientID, s.workspaceID)
+	log.Printf("client %s (%d) disconnected\n", s.clientID, s.workspaceID) //nolint:gosec
 	s.isConnected.Store(false)
 	return s.conn.CloseNow()
 }
@@ -149,18 +149,21 @@ func (s *subscriber) Listen() {
 			case chunkMsg := <-s.chunkMsgQueue:
 				err := s.WriteMessage(chunkMsg, time.Second*1)
 				if err != nil {
+					//nolint:gosec
 					log.Printf("error sending chunk message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
 					s.checkWsError(err)
 				}
 			case eventMsg := <-s.eventMsgQueue:
 				err := s.WriteMessage(eventMsg, time.Second*1)
 				if err != nil {
+					//nolint:gosec
 					log.Printf("error sending event message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
 					s.checkWsError(err)
 				}
 			case cursorMsg := <-s.cursorMsgQueue:
 				err := s.WriteMessage(cursorMsg, time.Second*1)
 				if err != nil {
+					//nolint:gosec
 					log.Printf("error sending cursor message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
 					s.checkWsError(err)
 				}
@@ -218,6 +221,7 @@ func mapToStruct(data map[string]any, result interface{}) error {
 
 func (s *subscriber) checkWsError(err error) {
 	if websocket.CloseStatus(err) != -1 || strings.Contains(err.Error(), "EOF") {
+		//nolint:gosec
 		log.Printf("client %s (%d) fatal error, closing connection\n", s.clientID, s.workspaceID)
 		s.Close()
 		return

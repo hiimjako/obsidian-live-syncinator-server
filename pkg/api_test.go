@@ -1081,7 +1081,7 @@ func Test_fetchSnapshotHandler(t *testing.T) {
 		},
 	}
 
-	diskPaths := []string{}
+	diskPaths := make([]string, 0, len(filesToInsert))
 	for _, f := range filesToInsert {
 		form, contentType := testutils.CreateMultipart(t, f.filepath, f.file, false)
 		res, file := testutils.DoRequest[repository.File](

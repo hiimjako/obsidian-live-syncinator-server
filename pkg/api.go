@@ -388,6 +388,7 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, s.maxFileSizeBytes)
 	err := r.ParseMultipartForm(s.maxFileSizeBytes)
 	if err != nil {
 		http.Error(w, "Unable to parse form", http.StatusBadRequest)

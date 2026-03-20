@@ -21,6 +21,7 @@ func Logging(next http.Handler) http.Handler {
 		start := time.Now()
 		wrapped := &wrappedWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		next.ServeHTTP(wrapped, r)
+		//nolint:gosec
 		log.Println(wrapped.statusCode, r.Method, r.URL.Path, time.Since(start))
 	})
 }

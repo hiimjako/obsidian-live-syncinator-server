@@ -41,7 +41,7 @@ func run(ev *env.EnvVariables) error {
 	}
 	defer dbSqlite.Close()
 
-	if _, err := dbSqlite.Exec("PRAGMA journal_mode=WAL"); err != nil {
+	if _, err := dbSqlite.ExecContext(context.Background(), "PRAGMA journal_mode=WAL"); err != nil {
 		return err
 	}
 

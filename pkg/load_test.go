@@ -206,7 +206,7 @@ func generateDeterministicOperations(
 			length := rnd.IntN(maxChunkSize) + 1
 			text := make([]byte, length)
 			for j := range text {
-				text[j] = byte(rnd.IntN(26) + 'a')
+				text[j] = byte('a' + rnd.IntN(26)) //nolint:gosec // range is [0,25], safe
 			}
 			chunk = diff.Chunk{
 				Position: int64(pos),

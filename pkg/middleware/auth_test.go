@@ -28,7 +28,7 @@ func TestIsAuthenticated(t *testing.T) {
 		tokenExtractor JWTTokenExtractor,
 	) {
 		t.Run(name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)
 			if authHeader != "" {
 				req.Header.Set("Authorization", authHeader)
 			}
