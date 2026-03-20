@@ -19,8 +19,9 @@ type LoginResponse struct {
 }
 
 const (
-	ErrIncorrectPassword = "incorrect password"
-	ErrWorkspaceNotFound = "workspace not found"
+	ErrIncorrectPassword  = "incorrect password"
+	ErrWorkspaceNotFound  = "workspace not found"
+	ErrInvalidCredentials = "invalid credentials" //nolint:gosec
 )
 
 func (s *syncinator) authHandler() http.Handler {
@@ -58,12 +59,14 @@ func (s *syncinator) fetchWorkspaceHandler(w http.ResponseWriter, r *http.Reques
 
 	workspace, err := s.db.FetchWorkspace(r.Context(), data.Name)
 	if err != nil {
-		http.Error(w, ErrWorkspaceNotFound, http.StatusNotFound)
+		// dummy bcrypt to prevent timing oracle on workspace existence
+		bcrypt.CompareHashAndPassword([]byte("$2a$10$dummy"), []byte(data.Password)) //nolint:errcheck
+		http.Error(w, ErrInvalidCredentials, http.StatusUnauthorized)
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(workspace.Password), []byte(data.Password)); err != nil {
-		http.Error(w, ErrIncorrectPassword, http.StatusUnauthorized)
+		http.Error(w, ErrInvalidCredentials, http.StatusUnauthorized)
 		return
 	}
 

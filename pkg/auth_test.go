@@ -59,7 +59,7 @@ func Test_fetchWorkspaceHandler(t *testing.T) {
 		}
 		res, body := testutils.DoRequest[string](t, server, http.MethodPost, apiPath, data)
 		assert.Equal(t, http.StatusUnauthorized, res.Code)
-		assert.Equal(t, ErrIncorrectPassword, body)
+		assert.Equal(t, ErrInvalidCredentials, body)
 	})
 
 	t.Run("missing workspace", func(t *testing.T) {
@@ -69,8 +69,8 @@ func Test_fetchWorkspaceHandler(t *testing.T) {
 		}
 
 		res, body := testutils.DoRequest[string](t, server, http.MethodPost, apiPath, data)
-		assert.Equal(t, http.StatusNotFound, res.Code)
-		assert.Equal(t, ErrWorkspaceNotFound, body)
+		assert.Equal(t, http.StatusUnauthorized, res.Code)
+		assert.Equal(t, ErrInvalidCredentials, body)
 	})
 
 	t.Run("oversized body", func(t *testing.T) {
