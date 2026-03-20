@@ -83,6 +83,20 @@ func TestWriteObject_CleansUpTmpOnCopyError(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "no .tmp file should remain after io.Copy failure")
 }
 
+func TestDisk_PathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	d := NewDisk(dir)
+
+	_, err := d.ReadObject("../../etc/passwd")
+	assert.Error(t, err, "path traversal in ReadObject should be rejected")
+
+	err = d.WriteObject("../../etc/evil", strings.NewReader("pwned"))
+	assert.Error(t, err, "path traversal in WriteObject should be rejected")
+
+	err = d.DeleteObject("../../etc/important")
+	assert.Error(t, err, "path traversal in DeleteObject should be rejected")
+}
+
 func TestDisk(t *testing.T) {
 	dir := t.TempDir()
 	d := NewDisk(dir)

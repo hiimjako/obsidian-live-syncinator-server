@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var _ Storage = Disk{}
+
 type Disk struct {
 	basepath string
 }
@@ -18,6 +20,22 @@ func NewDisk(basepath string) Disk {
 	return Disk{
 		basepath: basepath,
 	}
+}
+
+func (d Disk) resolvePath(relativePath string) (string, error) {
+	diskPath := filepath.Join(d.basepath, relativePath)
+	absPath, err := filepath.Abs(diskPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid path: %w", err)
+	}
+	absBase, err := filepath.Abs(d.basepath)
+	if err != nil {
+		return "", fmt.Errorf("invalid basepath: %w", err)
+	}
+	if !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) && absPath != absBase {
+		return "", fmt.Errorf("path traversal detected: %s escapes basepath", relativePath)
+	}
+	return diskPath, nil
 }
 
 func (d Disk) CreateObject(file io.Reader) (string, error) {
@@ -64,9 +82,12 @@ func (d Disk) CreateObject(file io.Reader) (string, error) {
 }
 
 func (d Disk) DeleteObject(relativePath string) error {
-	diskPath := filepath.Join(d.basepath, relativePath)
+	diskPath, err := d.resolvePath(relativePath)
+	if err != nil {
+		return err
+	}
 
-	_, err := os.Stat(diskPath)
+	_, err = os.Stat(diskPath)
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -77,15 +98,21 @@ func (d Disk) DeleteObject(relativePath string) error {
 }
 
 func (d Disk) ReadObject(relativePath string) (io.ReadCloser, error) {
-	diskPath := filepath.Join(d.basepath, relativePath)
+	diskPath, err := d.resolvePath(relativePath)
+	if err != nil {
+		return nil, err
+	}
 
 	return os.Open(diskPath)
 }
 
 func (d Disk) WriteObject(relativePath string, content io.Reader) error {
-	diskPath := filepath.Join(d.basepath, relativePath)
+	diskPath, err := d.resolvePath(relativePath)
+	if err != nil {
+		return err
+	}
 
-	_, err := os.Stat(diskPath)
+	_, err = os.Stat(diskPath)
 	if os.IsNotExist(err) {
 		return err
 	}
