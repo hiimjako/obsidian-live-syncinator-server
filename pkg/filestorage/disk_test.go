@@ -2,8 +2,11 @@ package filestorage
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,6 +42,45 @@ func TestWriteObject(t *testing.T) {
 
 		assert.Error(t, d.WriteObject("not-existing-file", strings.NewReader("foo")))
 	})
+}
+
+type errReader struct{}
+
+func (e errReader) Read([]byte) (int, error) {
+	return 0, fmt.Errorf("intentional read error")
+}
+
+func TestCreateObject_CleansUpOnCopyError(t *testing.T) {
+	dir := t.TempDir()
+	d := NewDisk(dir)
+
+	_, err := d.CreateObject(errReader{})
+	assert.Error(t, err)
+
+	entries, err := os.ReadDir(dir)
+	assert.NoError(t, err)
+	assert.Empty(t, entries, "no orphaned files should remain after io.Copy failure")
+}
+
+func TestWriteObject_CleansUpTmpOnCopyError(t *testing.T) {
+	dir := t.TempDir()
+	d := NewDisk(dir)
+
+	p, err := d.CreateObject(strings.NewReader("original"))
+	require.NoError(t, err)
+
+	err = d.WriteObject(p, errReader{})
+	assert.Error(t, err)
+
+	r, err := d.ReadObject(p)
+	require.NoError(t, err)
+	defer r.Close()
+	content, _ := io.ReadAll(r)
+	assert.Equal(t, "original", string(content))
+
+	diskPath := filepath.Join(dir, p)
+	_, err = os.Stat(diskPath + ".tmp")
+	assert.True(t, os.IsNotExist(err), "no .tmp file should remain after io.Copy failure")
 }
 
 func TestDisk(t *testing.T) {

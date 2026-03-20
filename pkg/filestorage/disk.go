@@ -43,6 +43,14 @@ func (d Disk) CreateObject(file io.Reader) (string, error) {
 		}
 
 		if _, err = io.Copy(dst, file); err != nil {
+			dst.Close()
+			os.Remove(diskPath)
+			// best-effort cleanup of created parent directories
+			for dir := filepath.Dir(diskPath); dir != d.basepath; dir = filepath.Dir(dir) {
+				if rmErr := os.Remove(dir); rmErr != nil {
+					break
+				}
+			}
 			return "", err
 		}
 
@@ -89,6 +97,8 @@ func (d Disk) WriteObject(relativePath string, content io.Reader) error {
 
 	_, err = io.Copy(file, content)
 	if err != nil {
+		file.Close()
+		os.Remove(tmpPath)
 		return fmt.Errorf("failed to write content: %w", err)
 	}
 	file.Close()
