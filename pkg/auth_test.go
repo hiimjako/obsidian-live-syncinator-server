@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"net/http"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/hiimjako/syncinator/internal/migration"
@@ -70,6 +71,12 @@ func Test_fetchWorkspaceHandler(t *testing.T) {
 		res, body := testutils.DoRequest[string](t, server, http.MethodPost, apiPath, data)
 		assert.Equal(t, http.StatusNotFound, res.Code)
 		assert.Equal(t, ErrWorkspaceNotFound, body)
+	})
+
+	t.Run("oversized body", func(t *testing.T) {
+		largeBody := strings.Repeat("x", 2<<20) // 2MB
+		res, _ := testutils.DoRequest[string](t, server, http.MethodPost, apiPath, largeBody)
+		assert.Equal(t, http.StatusRequestEntityTooLarge, res.Code)
 	})
 
 	t.Cleanup(func() {

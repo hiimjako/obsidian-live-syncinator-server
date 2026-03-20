@@ -40,10 +40,13 @@ func (s *syncinator) authHandler() http.Handler {
 	return routerWithStack
 }
 
+const maxBodySize = 1 << 20 // 1MB
+
 func (s *syncinator) fetchWorkspaceHandler(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "error reading request body", http.StatusInternalServerError)
+		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 

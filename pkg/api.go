@@ -529,9 +529,10 @@ func (s *syncinator) updateFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "error reading request body", http.StatusInternalServerError)
+		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
 		return
 	}
 
