@@ -52,7 +52,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          args: --fix
+          args: ""
           version: latest
       - name: lint sql
         run: |
