@@ -152,6 +152,9 @@ func (s *subscriber) Listen() {
 					//nolint:gosec
 					log.Printf("error sending chunk message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
 					s.checkWsError(err)
+					if !s.IsConnected() {
+						return
+					}
 				}
 			case eventMsg := <-s.eventMsgQueue:
 				err := s.WriteMessage(eventMsg, time.Second*1)
@@ -159,6 +162,9 @@ func (s *subscriber) Listen() {
 					//nolint:gosec
 					log.Printf("error sending event message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
 					s.checkWsError(err)
+					if !s.IsConnected() {
+						return
+					}
 				}
 			case cursorMsg := <-s.cursorMsgQueue:
 				err := s.WriteMessage(cursorMsg, time.Second*1)
@@ -166,6 +172,9 @@ func (s *subscriber) Listen() {
 					//nolint:gosec
 					log.Printf("error sending cursor message from %s (%d): %v\n", s.clientID, s.workspaceID, err)
 					s.checkWsError(err)
+					if !s.IsConnected() {
+						return
+					}
 				}
 			case <-s.ctx.Done():
 				s.Close()
