@@ -28,6 +28,7 @@ func TestClose_CancelsContext(t *testing.T) {
 	assert.Equal(t, context.Canceled, server.ctx.Err())
 }
 
+
 func TestOptionsDefault_ZeroMinChangesThreshold(t *testing.T) {
 	opts := Options{}
 	opts.Default()
