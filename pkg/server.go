@@ -155,7 +155,7 @@ func (s *syncinator) initCache(cacheSize int) {
 }
 
 func (s *syncinator) Close() error {
-	if s.ctx.Err() != nil {
+	if s.ctx.Err() == nil {
 		s.cancel()
 	}
 	return nil

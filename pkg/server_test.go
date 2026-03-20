@@ -12,6 +12,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestClose_CancelsContext(t *testing.T) {
+	mockFileStorage := new(filestorage.MockFileStorage)
+	db := testutils.CreateDB(t)
+
+	opts := Options{JWTSecret: []byte("secret")}
+	server := New(db, mockFileStorage, opts)
+
+	require.NoError(t, server.ctx.Err())
+
+	err := server.Close()
+	require.NoError(t, err)
+
+	assert.Error(t, server.ctx.Err())
+	assert.Equal(t, context.Canceled, server.ctx.Err())
+}
+
 func TestNew(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
 	db := testutils.CreateDB(t)
