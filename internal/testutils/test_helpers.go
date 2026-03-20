@@ -27,7 +27,15 @@ func CreateDB(t testing.TB) *sql.DB {
 	// https://stackoverflow.com/a/77150429
 	db, err := sql.Open("sqlite3", "file:memdb1?mode=memory&cache=shared")
 	require.NoError(t, err)
+	_, err = db.ExecContext(context.Background(), "PRAGMA foreign_keys = ON")
+	require.NoError(t, err)
 	require.NoError(t, migration.Migrate(db))
+
+	for _, id := range []int{1, 2, 10, 11, 123} {
+		_, _ = db.ExecContext(context.Background(),
+			"INSERT OR IGNORE INTO workspaces (id, name, password) VALUES (?, ?, ?)",
+			id, fmt.Sprintf("workspace_%d", id), "test")
+	}
 
 	t.Cleanup(func() { db.Close() })
 

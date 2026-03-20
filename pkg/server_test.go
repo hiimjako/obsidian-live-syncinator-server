@@ -28,6 +28,17 @@ func TestClose_CancelsContext(t *testing.T) {
 	assert.Equal(t, context.Canceled, server.ctx.Err())
 }
 
+func TestForeignKeysEnforced(t *testing.T) {
+	db := testutils.CreateDB(t)
+	repo := repository.New(db)
+
+	_, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath: "dp", WorkspacePath: "wp", MimeType: "text/plain",
+		Hash: "h", WorkspaceID: 99999,
+	})
+	assert.Error(t, err, "inserting file with non-existent workspace_id should fail")
+}
+
 func TestUniqueConstraint_WorkspaceIdAndPath(t *testing.T) {
 	db := testutils.CreateDB(t)
 	repo := repository.New(db)

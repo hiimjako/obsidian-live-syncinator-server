@@ -44,6 +44,9 @@ func run(ev *env.EnvVariables) error {
 	if _, err := dbSqlite.ExecContext(context.Background(), "PRAGMA journal_mode=WAL"); err != nil {
 		return err
 	}
+	if _, err := dbSqlite.ExecContext(context.Background(), "PRAGMA foreign_keys = ON"); err != nil {
+		return err
+	}
 
 	if err := migration.Migrate(dbSqlite); err != nil {
 		return err
