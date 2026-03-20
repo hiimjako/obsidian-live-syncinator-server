@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/hiimjako/syncinator/internal/env"
@@ -38,6 +39,7 @@ func run(ev *env.EnvVariables) error {
 	if err != nil {
 		return err
 	}
+	defer dbSqlite.Close()
 
 	if err := migration.Migrate(dbSqlite); err != nil {
 		return err
@@ -65,9 +67,10 @@ func run(ev *env.EnvVariables) error {
 	defer handler.Close()
 
 	s := &http.Server{
-		Handler:      handler,
-		ReadTimeout:  time.Second * 10,
-		WriteTimeout: time.Second * 10,
+		Handler:     handler,
+		ReadTimeout: time.Second * 10,
+		// WriteTimeout is intentionally not set: it applies to the entire
+		// connection lifetime and kills long-lived WebSocket connections.
 	}
 	errc := make(chan error, 1)
 	go func() {
@@ -75,7 +78,7 @@ func run(ev *env.EnvVariables) error {
 	}()
 
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
 	select {
 	case err := <-errc:
 		log.Printf("failed to serve: %v", err)
