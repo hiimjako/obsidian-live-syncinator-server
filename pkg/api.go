@@ -191,7 +191,8 @@ func (s *syncinator) listOperationsHandler(w http.ResponseWriter, r *http.Reques
 		var chunks []diff.Chunk
 		err := json.Unmarshal([]byte(dbOperations[i].Operation), &chunks)
 		if err != nil {
-			continue
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
 		}
 
 		operations[i] = Operation{

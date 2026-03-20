@@ -925,6 +925,41 @@ func Test_listOperationsHandler_invalidFileID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, res.Code)
 }
 
+func Test_listOperationsHandler_corruptOperation(t *testing.T) {
+	mockFileStorage := new(filestorage.MockFileStorage)
+	db := testutils.CreateDB(t)
+	options := Options{JWTSecret: []byte("secret")}
+	server := New(db, mockFileStorage, options)
+	t.Cleanup(func() { server.Close() })
+
+	var workspaceID int64 = 1
+	_, err := server.db.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath:      "dp",
+		WorkspacePath: "wp",
+		MimeType:      "text/plain",
+		Hash:          "h",
+		WorkspaceID:   workspaceID,
+	})
+	require.NoError(t, err)
+
+	err = server.db.CreateOperation(context.Background(), repository.CreateOperationParams{
+		FileID:    1,
+		Version:   1,
+		Operation: `"just a string, not an array"`,
+	})
+	require.NoError(t, err)
+
+	res, _ := testutils.DoRequest[string](
+		t,
+		server,
+		http.MethodGet,
+		PathHTTPAPI+"/operation?from=0&fileId=1",
+		nil,
+		testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+	)
+	assert.Equal(t, http.StatusInternalServerError, res.Code)
+}
+
 // Test_listSnapshotsHandler tests the listSnapshotsHandler using mocked storage
 func Test_listSnapshotsHandler(t *testing.T) {
 	mockFileStorage := new(filestorage.MockFileStorage)
