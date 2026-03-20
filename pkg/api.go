@@ -74,6 +74,17 @@ func (s *syncinator) apiHandler() http.Handler {
 	return routerWithStack
 }
 
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(v); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	buf.WriteTo(w) //nolint:errcheck
+}
+
 func (s *syncinator) exportHandler(w http.ResponseWriter, r *http.Request) {
 	workspaceID, _ := middleware.WorkspaceIDFromCtx(r.Context())
 
@@ -93,28 +104,27 @@ func (s *syncinator) exportHandler(w http.ResponseWriter, r *http.Request) {
 	for _, file := range files {
 		f, err := zipWriter.Create(file.WorkspacePath)
 		if err != nil {
-			http.Error(w, "Failed to create file in zip", http.StatusInternalServerError)
+			log.Printf("failed to create file in zip: %v", err)
 			return
 		}
 
 		r, err := s.storage.ReadObject(file.DiskPath)
 		if err != nil {
-			http.Error(w, "Failed to create file in zip", http.StatusInternalServerError)
+			log.Printf("failed to read object for zip: %v", err)
 			return
 		}
 
 		_, err = io.Copy(f, r)
 		if err != nil {
-			http.Error(w, "Failed to write content to zip", http.StatusInternalServerError)
+			r.Close()
+			log.Printf("failed to write content to zip: %v", err)
 			return
 		}
 		r.Close()
 	}
 
-	err = zipWriter.Close()
-	if err != nil {
-		log.Printf("Failed to close zip writer: %v", err)
-		http.Error(w, "Failed to create zip file", http.StatusInternalServerError)
+	if err = zipWriter.Close(); err != nil {
+		log.Printf("failed to close zip writer: %v", err)
 		return
 	}
 }
@@ -128,12 +138,7 @@ func (s *syncinator) listFilesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(files); err != nil {
-		http.Error(w, "error sending request body", http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, files)
 }
 
 func (s *syncinator) listFileSnapshotsHandler(w http.ResponseWriter, r *http.Request) {
@@ -154,12 +159,7 @@ func (s *syncinator) listFileSnapshotsHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(files); err != nil {
-		http.Error(w, "error sending request body", http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, files)
 }
 
 func (s *syncinator) listOperationsHandler(w http.ResponseWriter, r *http.Request) {
@@ -203,12 +203,7 @@ func (s *syncinator) listOperationsHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(operations); err != nil {
-		http.Error(w, "error sending request body", http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, operations)
 }
 
 func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
@@ -248,17 +243,17 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 		"Content-Disposition": []string{fmt.Sprintf("form-data; name=%q", MultipartMetadata)},
 	})
 	if err != nil {
-		http.Error(w, "Error creating metadata part", http.StatusInternalServerError)
+		log.Printf("error creating metadata part: %v", err)
 		return
 	}
 	if err := json.NewEncoder(metaPart).Encode(file); err != nil {
-		http.Error(w, "error creating JSON part", http.StatusInternalServerError)
+		log.Printf("error encoding file metadata: %v", err)
 		return
 	}
 
 	fileContent, err := s.storage.ReadObject(file.DiskPath)
 	if err != nil {
-		http.Error(w, ErrReadingFile, http.StatusInternalServerError)
+		log.Printf("error reading file %d: %v", file.ID, err)
 		return
 	}
 	defer fileContent.Close()
@@ -274,21 +269,19 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 
 	filePart, err := mw.CreatePart(mimeHeader)
 	if err != nil {
-		http.Error(w, "Error creating file part", http.StatusInternalServerError)
+		log.Printf("error creating file part: %v", err)
 		return
 	}
 
 	var writer = filePart
-	// if it is a non text file encode it in base64
 	if !mimeutils.IsText(file.MimeType) {
 		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
 		defer encoder.Close()
 		writer = encoder
 	}
 
-	_, err = io.Copy(writer, fileContent)
-	if err != nil {
-		http.Error(w, "Error streaming file content", http.StatusInternalServerError)
+	if _, err = io.Copy(writer, fileContent); err != nil {
+		log.Printf("error streaming file content: %v", err)
 		return
 	}
 }
@@ -335,17 +328,17 @@ func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request
 		"Content-Disposition": []string{fmt.Sprintf("form-data; name=%q", MultipartMetadata)},
 	})
 	if err != nil {
-		http.Error(w, "Error creating metadata part", http.StatusInternalServerError)
+		log.Printf("error creating metadata part: %v", err)
 		return
 	}
 	if err := json.NewEncoder(metaPart).Encode(snapshot); err != nil {
-		http.Error(w, "error creating JSON part", http.StatusInternalServerError)
+		log.Printf("error encoding snapshot metadata: %v", err)
 		return
 	}
 
 	fileMeta, err := s.db.FetchFile(r.Context(), snapshot.FileID)
 	if err != nil {
-		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
+		log.Printf("error fetching file metadata for snapshot: %v", err)
 		return
 	}
 
@@ -360,21 +353,19 @@ func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request
 
 	filePart, err := mw.CreatePart(mimeHeader)
 	if err != nil {
-		http.Error(w, "Error creating file part", http.StatusInternalServerError)
+		log.Printf("error creating file part: %v", err)
 		return
 	}
 
 	var writer = filePart
-	// if it is a non text file encode it in base64
 	if !mimeutils.IsText(fileMeta.MimeType) {
 		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
 		defer encoder.Close()
 		writer = encoder
 	}
 
-	_, err = writer.Write([]byte(content))
-	if err != nil {
-		http.Error(w, "Error streaming file content", http.StatusInternalServerError)
+	if _, err = writer.Write([]byte(content)); err != nil {
+		log.Printf("error writing snapshot content: %v", err)
 		return
 	}
 }
@@ -457,12 +448,7 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(dbFile); err != nil {
-		http.Error(w, "error sending request body", http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusCreated, dbFile)
 }
 
 func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
@@ -586,10 +572,5 @@ func (s *syncinator) updateFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(updatedFile); err != nil {
-		http.Error(w, "error sending request body", http.StatusInternalServerError)
-		return
-	}
+	writeJSON(w, http.StatusOK, updatedFile)
 }
