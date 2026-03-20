@@ -76,6 +76,34 @@ func TestIsAuthenticated(t *testing.T) {
 	}
 }
 
+func TestCreateToken_NeverReturnsEmptyTokenWithNilError(t *testing.T) {
+	tests := []struct {
+		name   string
+		secret []byte
+	}{
+		{"valid secret", []byte("my-secret-key")},
+		{"empty secret", []byte{}},
+		{"nil secret", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ao := AuthOptions{SecretKey: tt.secret}
+			token, err := CreateToken(ao, 42)
+
+			if token == "" {
+				assert.Error(t, err, "error must not be nil when token is empty")
+			}
+			if err == nil {
+				assert.NotEmpty(t, token, "token must not be empty when error is nil")
+				workspaceID, verifyErr := VerifyToken(ao, token)
+				assert.NoError(t, verifyErr)
+				assert.Equal(t, int64(42), workspaceID)
+			}
+		})
+	}
+}
+
 func TestWorkspaceIDFromCtx(t *testing.T) {
 	expectedWorkspaceID := int64(10)
 	ctx := context.WithValue(context.Background(), AuthWorkspaceID, int64(10))

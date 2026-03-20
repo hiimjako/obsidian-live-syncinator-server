@@ -92,7 +92,7 @@ func CreateToken(ao AuthOptions, workspaceID int64) (string, error) {
 		})
 	tokenString, err := token.SignedString(ao.SecretKey)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	return tokenString, nil
