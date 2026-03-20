@@ -640,6 +640,55 @@ func Test_deleteFileHandler(t *testing.T) {
 		mockFileStorage.AssertCalled(t, "DeleteObject", diskPath)
 	})
 
+	t.Run("file preserved on storage delete failure", func(t *testing.T) {
+		mockFileStorage := new(filestorage.MockFileStorage)
+		db := testutils.CreateDB(t)
+		options := Options{JWTSecret: []byte("secret")}
+		server := New(db, mockFileStorage, options)
+		t.Cleanup(func() { server.Close() })
+
+		var workspaceID int64 = 10
+		diskPath := "/foo/bar"
+		snapshotDiskPath := "/snapshot/path"
+
+		mockFileStorage.On("CreateObject", mock.AnythingOfType("multipart.sectionReadCloser")).
+			Return(diskPath, nil).Once()
+
+		form, contentType := testutils.CreateMultipart(t, "/home/file", []byte("content"), false)
+		res, createBody := testutils.DoRequest[repository.File](
+			t, server, http.MethodPost, PathHTTPAPI+"/file", form,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+			testutils.WithContentTypeHeader(contentType),
+		)
+		require.Equal(t, http.StatusCreated, res.Code)
+
+		err := server.db.CreateSnapshot(server.ctx, repository.CreateSnapshotParams{
+			FileID: createBody.ID, Version: 0, DiskPath: snapshotDiskPath,
+			Type: "file", Hash: "h", WorkspaceID: workspaceID,
+		})
+		require.NoError(t, err)
+
+		mockFileStorage.On("DeleteObject", diskPath).Return(nil).Once()
+		mockFileStorage.On("DeleteObject", snapshotDiskPath).Return(fmt.Errorf("storage error")).Once()
+
+		res, _ = testutils.DoRequest[string](
+			t, server, http.MethodDelete,
+			PathHTTPAPI+"/file/"+strconv.Itoa(int(createBody.ID)), nil,
+			testutils.WithAuthHeader(options.JWTSecret, workspaceID),
+		)
+		assert.Equal(t, http.StatusInternalServerError, res.Code)
+
+		files, err := server.db.FetchWorkspaceFiles(context.Background(), workspaceID)
+		assert.NoError(t, err)
+		assert.Len(t, files, 1, "file DB record should be preserved on storage failure")
+
+		snapshots, err := server.db.FetchSnapshots(context.Background(), repository.FetchSnapshotsParams{
+			FileID: createBody.ID, WorkspaceID: workspaceID,
+		})
+		assert.NoError(t, err)
+		assert.Len(t, snapshots, 1, "snapshot DB record should be preserved on storage failure")
+	})
+
 	t.Run("unauthorize to delete a file of other workspace", func(t *testing.T) {
 		mockFileStorage := new(filestorage.MockFileStorage)
 		db := testutils.CreateDB(t)

@@ -485,18 +485,7 @@ func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.storage.DeleteObject(file.DiskPath); err != nil {
-		http.Error(w, ErrNotExistingFile, http.StatusInternalServerError)
-		return
-	}
-
-	err = s.db.DeleteFile(r.Context(), int64(fileID))
-	if err != nil {
-		http.Error(w, ErrInvalidFile, http.StatusInternalServerError)
-		return
-	}
-
-	snapshots, err := s.db.FetchSnapshots(s.ctx, repository.FetchSnapshotsParams{
+	snapshots, err := s.db.FetchSnapshots(r.Context(), repository.FetchSnapshotsParams{
 		FileID:      int64(fileID),
 		WorkspaceID: workspaceID,
 	})
@@ -505,16 +494,38 @@ func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// delete storage objects first — if any fail, DB records are untouched
 	for _, snapshot := range snapshots {
-		err = s.storage.DeleteObject(snapshot.DiskPath)
-		if err != nil {
+		if err := s.storage.DeleteObject(snapshot.DiskPath); err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 	}
 
-	err = s.db.DeleteSnapshotsForFile(s.ctx, int64(fileID))
+	if err := s.storage.DeleteObject(file.DiskPath); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	// delete DB records in a transaction — all or nothing
+	tx, err := s.conn.BeginTx(r.Context(), nil)
 	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	txq := s.db.WithTx(tx)
+	if err := txq.DeleteSnapshotsForFile(r.Context(), int64(fileID)); err != nil {
+		_ = tx.Rollback()
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if err := txq.DeleteFile(r.Context(), int64(fileID)); err != nil {
+		_ = tx.Rollback()
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Commit(); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
