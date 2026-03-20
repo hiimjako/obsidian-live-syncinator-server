@@ -78,6 +78,7 @@ type LockedCachedFile struct {
 type syncinator struct {
 	ctx    context.Context
 	cancel context.CancelFunc
+	wg     sync.WaitGroup
 
 	jwtSecret            []byte
 	maxFileSizeBytes     int64
@@ -130,8 +131,15 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 	s.serverMux.Handle(PathHTTPAuth+"/", http.StripPrefix(PathHTTPAuth, s.authHandler()))
 	s.serverMux.Handle(PathWebSocket, s.wsHandler())
 
-	go s.processFileChanges()
-	go s.purgeCache()
+	s.wg.Add(2)
+	go func() {
+		defer s.wg.Done()
+		s.processFileChanges()
+	}()
+	go func() {
+		defer s.wg.Done()
+		s.purgeCache()
+	}()
 
 	return s
 }
@@ -158,6 +166,7 @@ func (s *syncinator) Close() error {
 	if s.ctx.Err() == nil {
 		s.cancel()
 	}
+	s.wg.Wait()
 	return nil
 }
 
