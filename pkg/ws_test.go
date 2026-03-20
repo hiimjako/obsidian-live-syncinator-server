@@ -842,6 +842,38 @@ func marshal(t *testing.T, thing any) string {
 	return string(j)
 }
 
+func TestFetchLatestSnapshotForFile_ReturnsNewest(t *testing.T) {
+	db := testutils.CreateDB(t)
+	repo := repository.New(db)
+
+	_, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath:      "dp",
+		WorkspacePath: "wp",
+		MimeType:      "text/plain",
+		Hash:          "h",
+		WorkspaceID:   1,
+	})
+	require.NoError(t, err)
+
+	err = repo.CreateSnapshot(context.Background(), repository.CreateSnapshotParams{
+		FileID: 1, Version: 1, DiskPath: "old_path", Type: "file", Hash: "old", WorkspaceID: 1,
+	})
+	require.NoError(t, err)
+
+	// ensure different second-level created_at timestamps (SQLite precision)
+	time.Sleep(1100 * time.Millisecond)
+
+	err = repo.CreateSnapshot(context.Background(), repository.CreateSnapshotParams{
+		FileID: 1, Version: 5, DiskPath: "new_path", Type: "file", Hash: "new", WorkspaceID: 1,
+	})
+	require.NoError(t, err)
+
+	latest, err := repo.FetchLatestSnapshotForFile(context.Background(), 1)
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), latest.Version, "should return the newest snapshot")
+	assert.Equal(t, "new_path", latest.DiskPath)
+}
+
 func TestOnChunkMessage_DoesNotMutateInMemoryStateOnDBFailure(t *testing.T) {
 	fs := filestorage.NewDisk(t.TempDir())
 	diskPath, err := fs.CreateObject(strings.NewReader("original"))

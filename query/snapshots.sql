@@ -7,13 +7,13 @@ SELECT *
 FROM snapshots
 WHERE file_id = ?
   AND workspace_id = ?
-ORDER BY created_at, version DESC;
+ORDER BY created_at DESC, version DESC;
 
 -- name: FetchLatestSnapshotForFile :one
 SELECT *
 FROM snapshots
 WHERE file_id = ?
-ORDER BY created_at, version DESC
+ORDER BY created_at DESC, version DESC
 LIMIT 1;
 
 -- name: FetchSnapshotByVersion :one

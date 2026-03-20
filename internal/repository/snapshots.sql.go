@@ -49,7 +49,7 @@ const fetchLatestSnapshotForFile = `-- name: FetchLatestSnapshotForFile :one
 SELECT file_id, version, disk_path, hash, created_at, type, workspace_id
 FROM snapshots
 WHERE file_id = ?
-ORDER BY created_at, version DESC
+ORDER BY created_at DESC, version DESC
 LIMIT 1
 `
 
@@ -102,7 +102,7 @@ SELECT file_id, version, disk_path, hash, created_at, type, workspace_id
 FROM snapshots
 WHERE file_id = ?
   AND workspace_id = ?
-ORDER BY created_at, version DESC
+ORDER BY created_at DESC, version DESC
 `
 
 type FetchSnapshotsParams struct {
