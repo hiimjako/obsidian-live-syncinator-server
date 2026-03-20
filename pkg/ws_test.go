@@ -842,6 +842,62 @@ func marshal(t *testing.T, thing any) string {
 	return string(j)
 }
 
+func TestOnChunkMessage_DoesNotMutateInMemoryStateOnDBFailure(t *testing.T) {
+	fs := filestorage.NewDisk(t.TempDir())
+	diskPath, err := fs.CreateObject(strings.NewReader("original"))
+	require.NoError(t, err)
+
+	db := testutils.CreateDB(t)
+	repo := repository.New(db)
+
+	var workspaceID int64 = 1
+	file, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath:      diskPath,
+		WorkspacePath: "test_path",
+		MimeType:      "text/plain",
+		Hash:          "hash",
+		WorkspaceID:   workspaceID,
+	})
+	require.NoError(t, err)
+
+	opts := Options{JWTSecret: []byte("secret"), FlushInterval: time.Hour}
+	handler := New(db, fs, opts)
+	t.Cleanup(func() { handler.Close() })
+
+	handler.fileCache.Add(file.ID, &LockedCachedFile{
+		CachedFile: CachedFile{
+			File:           file,
+			Content:        "original",
+			pendingChanges: 0,
+		},
+	})
+
+	db.Close()
+
+	chunk := ChunkMessage{
+		WsMessageHeader: WsMessageHeader{
+			Type:   ChunkEventType,
+			FileID: file.ID,
+		},
+		Version: file.Version,
+		Chunks: []diff.Chunk{
+			{Position: 0, Type: diff.Add, Text: "modified ", Len: 9},
+		},
+	}
+
+	handler.onChunkMessage(nil, chunk)
+
+	cached, ok := handler.fileCache.Get(file.ID)
+	require.True(t, ok)
+
+	cached.mut.Lock()
+	defer cached.mut.Unlock()
+
+	assert.Equal(t, "original", cached.Content, "content should not be modified on DB failure")
+	assert.Equal(t, file.Version, cached.Version, "version should not be incremented on DB failure")
+	assert.Equal(t, int64(0), cached.pendingChanges, "pendingChanges should not be incremented on DB failure")
+}
+
 func Benchmark_onChunkMessage(b *testing.B) {
 	log.SetOutput(io.Discard)
 

@@ -179,15 +179,13 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		}
 	}
 
-	file.Content = diff.ApplyMultiple(file.Content, chunkToApply)
-	file.Version += 1
-	file.pendingChanges += 1
-	file.UpdatedAt = time.Now()
+	newContent := diff.ApplyMultiple(file.Content, chunkToApply)
+	newVersion := file.Version + 1
 
 	msgToBroadcast := ChunkMessage{
 		WsMessageHeader: data.WsMessageHeader,
 		Chunks:          chunkToApply,
-		Version:         file.Version,
+		Version:         newVersion,
 	}
 
 	committed := false
@@ -214,7 +212,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	}
 	err = txq.CreateOperation(s.ctx, repository.CreateOperationParams{
 		FileID:    file.ID,
-		Version:   file.Version,
+		Version:   newVersion,
 		Operation: string(operation),
 	})
 	if err != nil {
@@ -224,7 +222,7 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 
 	err = txq.UpdateFileVersion(s.ctx, repository.UpdateFileVersionParams{
 		ID:      file.ID,
-		Version: file.Version,
+		Version: newVersion,
 	})
 	if err != nil {
 		log.Printf("error while updating version. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
@@ -236,6 +234,12 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		return
 	}
 	committed = true
+
+	// Apply in-memory changes only after successful commit
+	file.Content = newContent
+	file.Version = newVersion
+	file.pendingChanges += 1
+	file.UpdatedAt = time.Now()
 
 	s.broadcastMessage(sender, msgToBroadcast)
 }
