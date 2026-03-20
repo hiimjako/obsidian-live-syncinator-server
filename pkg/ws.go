@@ -249,7 +249,7 @@ func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
 		return
 	}
 
-	err := s.publishLimiter.Wait(context.Background())
+	err := s.publishLimiter.Wait(s.ctx)
 	if err != nil {
 		log.Println(err)
 	}
