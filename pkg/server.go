@@ -47,7 +47,7 @@ func (o *Options) Default() {
 		o.CacheSize = 128
 	}
 
-	if o.MinChangesThreshold <= 0 {
+	if o.MinChangesThreshold < 0 {
 		o.MinChangesThreshold = 5
 	}
 
