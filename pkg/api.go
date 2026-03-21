@@ -437,7 +437,7 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mimeType := requestutils.DetectFileMimeType(fileReader)
+	mimeType := requestutils.DetectFileMimeType(fileReader, filepath)
 	hash, err := filestorage.GenerateHash(fileReader)
 	if err != nil {
 		http.Error(w, ErrInvalidFile, http.StatusInternalServerError)

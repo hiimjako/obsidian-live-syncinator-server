@@ -4,6 +4,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"path/filepath"
 	"unicode/utf8"
 )
 
@@ -16,8 +17,9 @@ func IsMultipartFormData(r *http.Request) bool {
 }
 
 // DetectFileMimeType detects the MIME type of the file based on its content.
-// If it cannot determine a more specific one, it returns "application/octet-stream".
-func DetectFileMimeType(file io.ReadSeeker) string {
+// If the file is empty, it falls back to extension-based detection.
+// If it cannot determine a more specific type, it returns "application/octet-stream".
+func DetectFileMimeType(file io.ReadSeeker, filename string) string {
 	const defaultContentType = "application/octet-stream"
 	const defaultTextType = "text/plain; charset=utf-8"
 
@@ -26,12 +28,10 @@ func DetectFileMimeType(file io.ReadSeeker) string {
 		return defaultContentType
 	}
 
-	// Use mime.TypeByExtension as a fallback for file extension MIME type
-	// Try to detect the MIME type based on file content (magic number)
 	buf := make([]byte, 512)
 	n, err := file.Read(buf)
 	if err != nil {
-		return defaultContentType
+		return mimeFromExtension(filename, defaultContentType)
 	}
 
 	_, err = file.Seek(0, io.SeekStart)
@@ -45,4 +45,42 @@ func DetectFileMimeType(file io.ReadSeeker) string {
 	}
 
 	return detectedContentType
+}
+
+var textExtensions = map[string]bool{
+	".md":       true,
+	".markdown": true,
+	".txt":      true,
+	".csv":      true,
+	".json":     true,
+	".xml":      true,
+	".yaml":     true,
+	".yml":      true,
+	".toml":     true,
+	".html":     true,
+	".css":      true,
+	".js":       true,
+	".ts":       true,
+	".go":       true,
+	".py":       true,
+	".sh":       true,
+	".svg":      true,
+}
+
+func mimeFromExtension(filename, fallback string) string {
+	if filename == "" {
+		return fallback
+	}
+	ext := filepath.Ext(filename)
+	if ext == "" {
+		return fallback
+	}
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType != "" {
+		return mimeType
+	}
+	if textExtensions[ext] {
+		return "text/plain; charset=utf-8"
+	}
+	return fallback
 }
