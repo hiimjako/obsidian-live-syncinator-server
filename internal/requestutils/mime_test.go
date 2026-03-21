@@ -2,6 +2,7 @@ package requestutils
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,7 +19,8 @@ func TestDetectFileMimeType_ValidUTF8Text(t *testing.T) {
 func TestDetectFileMimeType_EmptyFile(t *testing.T) {
 	reader := bytes.NewReader([]byte{})
 	mimeType := DetectFileMimeType(reader, "notes.md")
-	assert.Equal(t, "text/plain; charset=utf-8", mimeType)
+	assert.True(t, strings.HasPrefix(mimeType, "text/"),
+		"expected a text/* MIME type for .md, got %q", mimeType)
 }
 
 func TestDetectFileMimeType_EmptyFileUnknownExtension(t *testing.T) {

@@ -31,6 +31,7 @@ func DetectFileMimeType(file io.ReadSeeker, filename string) string {
 	buf := make([]byte, 512)
 	n, err := file.Read(buf)
 	if err != nil {
+		_, _ = file.Seek(0, io.SeekStart)
 		return mimeFromExtension(filename, defaultContentType)
 	}
 
