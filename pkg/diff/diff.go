@@ -1,6 +1,8 @@
 package diff
 
 import (
+	"fmt"
+
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
@@ -17,6 +19,24 @@ type Chunk struct {
 	Position int64  `json:"position"`
 	Text     string `json:"text"`
 	Len      int64  `json:"len"`
+}
+
+func ValidateChunks(chunks []Chunk) error {
+	for i, c := range chunks {
+		if c.Type != Add && c.Type != Remove {
+			return fmt.Errorf("chunk %d: invalid operation type %d", i, c.Type)
+		}
+		if c.Position < 0 {
+			return fmt.Errorf("chunk %d: negative position %d", i, c.Position)
+		}
+		if c.Len < 0 {
+			return fmt.Errorf("chunk %d: negative len %d", i, c.Len)
+		}
+		if c.Type == Add && c.Len != int64(len([]rune(c.Text))) {
+			return fmt.Errorf("chunk %d: len %d does not match text rune count %d", i, c.Len, len([]rune(c.Text)))
+		}
+	}
+	return nil
 }
 
 func Compute(oldText, newText []rune) []Chunk {

@@ -114,6 +114,11 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 		return
 	}
 
+	if err := diff.ValidateChunks(data.Chunks); err != nil {
+		log.Printf("invalid chunks, skipping message. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
+		return
+	}
+
 	file, ok := s.fileCache.Get(data.FileID)
 	if !ok {
 		var err error

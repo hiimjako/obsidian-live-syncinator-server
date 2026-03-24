@@ -120,6 +120,49 @@ func TestApply_NegativePosition(t *testing.T) {
 	})
 }
 
+func TestValidateChunks(t *testing.T) {
+	t.Run("valid chunks", func(t *testing.T) {
+		chunks := []Chunk{
+			{Type: Add, Position: 0, Text: "hello", Len: 5},
+			{Type: Remove, Position: 5, Len: 3},
+			{Type: Add, Position: 2, Text: "👋🎉", Len: 2},
+		}
+		assert.NoError(t, ValidateChunks(chunks))
+	})
+
+	t.Run("mismatched len on add", func(t *testing.T) {
+		chunks := []Chunk{
+			{Type: Add, Position: 0, Text: "hi", Len: 10},
+		}
+		assert.Error(t, ValidateChunks(chunks))
+	})
+
+	t.Run("empty chunks", func(t *testing.T) {
+		assert.NoError(t, ValidateChunks(nil))
+	})
+
+	t.Run("negative position", func(t *testing.T) {
+		chunks := []Chunk{
+			{Type: Add, Position: -1, Text: "x", Len: 1},
+		}
+		assert.Error(t, ValidateChunks(chunks))
+	})
+
+	t.Run("negative len", func(t *testing.T) {
+		chunks := []Chunk{
+			{Type: Remove, Position: 0, Len: -5},
+		}
+		assert.Error(t, ValidateChunks(chunks))
+	})
+
+	t.Run("invalid operation type", func(t *testing.T) {
+		chunks := []Chunk{
+			{Type: 99, Position: 0, Text: "x", Len: 1},
+		}
+		assert.Error(t, ValidateChunks(chunks))
+	})
+}
+
 func TestTransform_UTF16(t *testing.T) {
 	t.Run("insert vs insert with emojis", func(t *testing.T) {
 		op1 := Chunk{Type: Add, Position: 2, Text: "👋", Len: int64(len([]rune("👋")))}
