@@ -147,6 +147,8 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 
 	s.initCache(opts.CacheSize)
 
+	s.serverMux.HandleFunc("/healthz", s.healthzHandler)
+	s.serverMux.HandleFunc("/readyz", s.readyzHandler)
 	s.serverMux.Handle(PathHTTPAPI+"/", http.StripPrefix(PathHTTPAPI, s.apiHandler()))
 	s.serverMux.Handle(PathHTTPAuth+"/", http.StripPrefix(PathHTTPAuth, s.authHandler()))
 	s.serverMux.Handle(PathWebSocket, s.wsHandler())
@@ -180,6 +182,18 @@ func (s *syncinator) initCache(cacheSize int) {
 		log.Fatalf("error creating lru cache: %v", err)
 	}
 	s.fileCache = fileCache
+}
+
+func (s *syncinator) healthzHandler(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *syncinator) readyzHandler(w http.ResponseWriter, _ *http.Request) {
+	if err := s.conn.PingContext(s.ctx); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *syncinator) Close() error {

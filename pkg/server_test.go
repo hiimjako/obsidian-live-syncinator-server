@@ -3,6 +3,8 @@ package syncinator
 import (
 	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/hiimjako/syncinator/internal/repository"
@@ -100,4 +102,51 @@ func TestNew(t *testing.T) {
 	t.Cleanup(func() { server.Close() })
 
 	assert.Len(t, server.fileCache.Keys(), 0)
+}
+
+func TestHealthz(t *testing.T) {
+	db := testutils.CreateDB(t)
+	mockFS := new(filestorage.MockFileStorage)
+	handler := New(db, mockFS, Options{JWTSecret: []byte("secret")})
+	ts := httptest.NewServer(handler)
+	t.Cleanup(func() { ts.Close(); handler.Close() })
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/healthz", http.NoBody)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestReadyz(t *testing.T) {
+	db := testutils.CreateDB(t)
+	mockFS := new(filestorage.MockFileStorage)
+	handler := New(db, mockFS, Options{JWTSecret: []byte("secret")})
+	ts := httptest.NewServer(handler)
+	t.Cleanup(func() { ts.Close(); handler.Close() })
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/readyz", http.NoBody)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestReadyz_DBDown(t *testing.T) {
+	db := testutils.CreateDB(t)
+	mockFS := new(filestorage.MockFileStorage)
+	handler := New(db, mockFS, Options{JWTSecret: []byte("secret")})
+	ts := httptest.NewServer(handler)
+	t.Cleanup(func() { ts.Close(); handler.Close() })
+
+	db.Close()
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, ts.URL+"/readyz", http.NoBody)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 }
