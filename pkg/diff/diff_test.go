@@ -120,6 +120,16 @@ func TestApply_NegativePosition(t *testing.T) {
 	})
 }
 
+func TestApply_HugePosition(t *testing.T) {
+	text := []rune("hello")
+
+	result := Apply(text, Chunk{Type: Add, Position: 999999, Text: "!", Len: 1})
+	assert.Equal(t, "hello!", string(result))
+
+	result = Apply(text, Chunk{Type: Remove, Position: 999999, Len: 5})
+	assert.Equal(t, "hello", string(result))
+}
+
 func TestValidateChunks(t *testing.T) {
 	t.Run("valid chunks", func(t *testing.T) {
 		chunks := []Chunk{

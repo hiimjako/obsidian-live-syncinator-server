@@ -162,6 +162,125 @@ func Test_loadTest(t *testing.T) {
 	})
 }
 
+func Test_loadTest_samePosition(t *testing.T) {
+	const (
+		numClients     = 10
+		opsPerClient   = 25
+		initialContent = ""
+	)
+
+	// all clients insert at position 0
+	operations := make([]testOperation, numClients*opsPerClient)
+	for i := range operations {
+		text := string(rune('A' + i%26))
+		operations[i] = testOperation{
+			clientID: i % numClients,
+			sequence: i,
+			chunk:    diff.Chunk{Type: diff.Add, Position: 0, Text: text, Len: 1},
+		}
+	}
+
+	fs := filestorage.NewDisk(t.TempDir())
+	diskPath, err := fs.CreateObject(strings.NewReader(initialContent))
+	require.NoError(t, err)
+
+	db := testutils.CreateDB(t)
+	repo := repository.New(db)
+
+	var workspaceID int64 = 1
+	file, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath:      diskPath,
+		WorkspacePath: "workspace_path",
+		MimeType:      "text/plain",
+		Hash:          "",
+		WorkspaceID:   workspaceID,
+	})
+	require.NoError(t, err)
+
+	opts := Options{
+		JWTSecret:           []byte("secret"),
+		FlushInterval:       time.Second,
+		MinChangesThreshold: 5,
+	}
+	handler := New(db, fs, opts)
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	clients := make([]*testClient, numClients)
+	urlWorkspace := createWsURLWithAuth(t, ts.URL, workspaceID, opts.JWTSecret)
+
+	for i := range numClients {
+		//nolint
+		conn, _, err := websocket.Dial(ctx, urlWorkspace, nil)
+		require.NoError(t, err)
+
+		clients[i] = &testClient{
+			id:       i,
+			conn:     conn,
+			content:  initialContent,
+			version:  0,
+			received: make(chan ChunkMessage, opsPerClient*numClients),
+		}
+
+		go clients[i].listen(ctx)
+	}
+
+	for _, op := range operations {
+		client := clients[op.clientID]
+
+		client.mu.Lock()
+		msg := ChunkMessage{
+			WsMessageHeader: WsMessageHeader{
+				Type:   ChunkEventType,
+				FileID: file.ID,
+			},
+			Version: client.version,
+			Chunks:  []diff.Chunk{op.chunk},
+		}
+		client.mu.Unlock()
+
+		err := wsjson.Write(ctx, client.conn, msg)
+		require.NoError(t, err)
+
+		for _, c := range clients {
+			timeout := time.After(time.Second)
+			select {
+			case recvMsg := <-c.received:
+				c.mu.Lock()
+				c.content = diff.ApplyMultiple(c.content, recvMsg.Chunks)
+				c.version = recvMsg.Version
+				c.mu.Unlock()
+			case <-timeout:
+				t.Fatalf("Timeout waiting for message after operation %d from client %d", op.sequence, op.clientID)
+			}
+		}
+
+		time.Sleep(time.Millisecond * 10)
+	}
+
+	clients[0].mu.Lock()
+	finalContent := clients[0].content
+	clients[0].mu.Unlock()
+
+	for i := 1; i < len(clients); i++ {
+		clients[i].mu.Lock()
+		assert.Equal(t, finalContent, clients[i].content, "Client %d content mismatch", i)
+		clients[i].mu.Unlock()
+	}
+
+	fileFromCache, ok := handler.fileCache.Get(file.ID)
+	require.True(t, ok)
+	assert.Equal(t, fileFromCache.Content, finalContent, "Server content mismatch")
+	assert.Equal(t, len(finalContent), numClients*opsPerClient, "Expected one char per operation")
+
+	for _, c := range clients {
+		c.conn.Close(websocket.StatusNormalClosure, "")
+	}
+}
+
 type testClient struct {
 	id       int
 	conn     *websocket.Conn
