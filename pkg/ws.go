@@ -142,11 +142,8 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	// need to transform it
 	if data.Version < file.Version {
 		dbOperations, err := s.db.FetchFileOperationsFromVersion(s.ctx, repository.FetchFileOperationsFromVersionParams{
-
-			FileID: file.ID,
-
-			Version: data.Version,
-
+			FileID:      file.ID,
+			Version:     data.Version,
 			WorkspaceID: file.WorkspaceID,
 		})
 		if err != nil {
@@ -354,8 +351,8 @@ func (s *syncinator) processFileChanges() {
 	}
 
 	processFiles := func() {
-		for _, fileId := range s.fileCache.Keys() {
-			processFile(fileId)
+		for _, fileID := range s.fileCache.Keys() {
+			processFile(fileID)
 		}
 	}
 

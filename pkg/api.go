@@ -413,7 +413,7 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, ErrDuplicateFile, http.StatusConflict)
 		return
 	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if !errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -536,9 +536,9 @@ func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *syncinator) updateFileHandler(w http.ResponseWriter, r *http.Request) {
-	fileId, err := strconv.Atoi(r.PathValue("id"))
+	fileID, err := strconv.Atoi(r.PathValue("id"))
 
-	if fileId == 0 || err != nil {
+	if fileID == 0 || err != nil {
 		http.Error(w, "invalid file id", http.StatusBadRequest)
 		return
 	}
@@ -561,7 +561,7 @@ func (s *syncinator) updateFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, err := s.db.FetchFile(r.Context(), int64(fileId))
+	file, err := s.db.FetchFile(r.Context(), int64(fileID))
 	if err != nil {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return
@@ -582,7 +582,7 @@ func (s *syncinator) updateFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedFile, err := s.db.FetchFile(r.Context(), int64(fileId))
+	updatedFile, err := s.db.FetchFile(r.Context(), int64(fileID))
 	if err != nil {
 		http.Error(w, ErrNotExistingFile, http.StatusNotFound)
 		return

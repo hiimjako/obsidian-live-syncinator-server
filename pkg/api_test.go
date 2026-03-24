@@ -986,7 +986,7 @@ func Test_listOperationsHandler(t *testing.T) {
 			Len:      3,
 		},
 	}
-	chunksJson, err := json.Marshal(chunks)
+	chunksJSON, err := json.Marshal(chunks)
 	require.NoError(t, err)
 
 	operationsToInsert := []struct {
@@ -994,9 +994,9 @@ func Test_listOperationsHandler(t *testing.T) {
 		Version   int64
 		Operation string
 	}{
-		{fileID: fileID, Version: 1, Operation: string(chunksJson)},
-		{fileID: fileID, Version: 2, Operation: string(chunksJson)},
-		{fileID: 2, Version: 2, Operation: string(chunksJson)},
+		{fileID: fileID, Version: 1, Operation: string(chunksJSON)},
+		{fileID: fileID, Version: 2, Operation: string(chunksJSON)},
+		{fileID: 2, Version: 2, Operation: string(chunksJSON)},
 	}
 
 	for _, o := range operationsToInsert {
