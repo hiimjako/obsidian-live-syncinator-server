@@ -14,6 +14,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/google/uuid"
 	"github.com/hiimjako/syncinator/pkg/middleware"
+	"golang.org/x/time/rate"
 )
 
 type subscriber struct {
@@ -25,6 +26,7 @@ type subscriber struct {
 	isConnected     atomic.Bool
 	clientID        string
 	workspaceID     int64
+	msgLimiter      *rate.Limiter
 	chunkMsgQueue   chan ChunkMessage
 	eventMsgQueue   chan EventMessage
 	cursorMsgQueue  chan CursorMessage
@@ -38,6 +40,8 @@ func NewSubscriber(
 	ctx context.Context,
 	w http.ResponseWriter,
 	r *http.Request,
+	rateInterval time.Duration,
+	rateBurst int,
 	onChunkMessage func(*subscriber, ChunkMessage),
 	onEventMessage func(*subscriber, EventMessage),
 	onCursorMessage func(*subscriber, CursorMessage),
@@ -58,6 +62,7 @@ func NewSubscriber(
 		r:              r,
 		ctx:            ctx,
 		isConnected:    atomic.Bool{},
+		msgLimiter:     rate.NewLimiter(rate.Every(rateInterval), rateBurst),
 		chunkMsgQueue:  make(chan ChunkMessage, subscriberMessageBuffer),
 		eventMsgQueue:  make(chan EventMessage, subscriberMessageBuffer),
 		cursorMsgQueue: make(chan CursorMessage, subscriberMessageBuffer),
@@ -83,7 +88,8 @@ func (s *subscriber) IsConnected() bool {
 }
 
 func (s *subscriber) Close() error {
-	log.Printf("client %s (%d) disconnected\n", s.clientID, s.workspaceID) //nolint:gosec
+	//nolint:gosec
+	log.Printf("client %s (%d) disconnected\n", s.clientID, s.workspaceID)
 	s.isConnected.Store(false)
 	return s.conn.CloseNow()
 }
@@ -107,6 +113,12 @@ func (s *subscriber) Listen() {
 			msgType, err := s.MessageType(msg)
 			if err != nil {
 				log.Println(err)
+				continue
+			}
+
+			if !s.msgLimiter.Allow() {
+				//nolint:gosec
+				log.Printf("rate limited client %s (%d)\n", s.clientID, s.workspaceID)
 				continue
 			}
 

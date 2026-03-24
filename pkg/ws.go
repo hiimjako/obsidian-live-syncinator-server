@@ -85,7 +85,11 @@ func (s *syncinator) createSubscriber(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *syncinator) subscribe(w http.ResponseWriter, r *http.Request) error {
-	sub, err := NewSubscriber(s.ctx, w, r, s.onChunkMessage, s.onEventMessage, s.onCursorMessage)
+	sub, err := NewSubscriber(
+		s.ctx, w, r,
+		s.subscriberRateInterval, s.subscriberRateBurst,
+		s.onChunkMessage, s.onEventMessage, s.onCursorMessage,
+	)
 	if err != nil {
 		return err
 	}

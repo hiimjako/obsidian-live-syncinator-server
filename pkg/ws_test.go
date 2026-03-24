@@ -1048,6 +1048,88 @@ func TestReconstructSnapshot_AppliesDiffsInOrder(t *testing.T) {
 	})
 }
 
+func TestSubscriberRateLimiting(t *testing.T) {
+	fs := filestorage.NewDisk(t.TempDir())
+	diskPath, err := fs.CreateObject(strings.NewReader(""))
+	require.NoError(t, err)
+
+	db := testutils.CreateDB(t)
+	repo := repository.New(db)
+
+	var workspaceID int64 = 1
+	file, err := repo.CreateFile(context.Background(), repository.CreateFileParams{
+		DiskPath:      diskPath,
+		WorkspacePath: "workspace_path",
+		MimeType:      "text/plain",
+		Hash:          "",
+		WorkspaceID:   workspaceID,
+	})
+	require.NoError(t, err)
+
+	opts := Options{
+		JWTSecret:              []byte("secret"),
+		FlushInterval:          time.Hour,
+		SubscriberRateBurst:    1,
+		SubscriberRateInterval: 10 * time.Second,
+	}
+	handler := New(db, fs, opts)
+	ts := httptest.NewServer(handler)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(func() {
+		cancel()
+		ts.Close()
+		handler.Close()
+	})
+
+	url := createWsURLWithAuth(t, ts.URL, workspaceID, opts.JWTSecret)
+
+	//nolint:bodyclose
+	sender, _, err := websocket.Dial(ctx, url, nil)
+	require.NoError(t, err)
+
+	// send 3 messages as fast as possible (burst=1, so only 1 should be processed)
+	totalSent := 3
+	for i := range totalSent {
+		msg := ChunkMessage{
+			WsMessageHeader: WsMessageHeader{
+				Type:   ChunkEventType,
+				FileID: file.ID,
+			},
+			Version: int64(i),
+			Chunks: []diff.Chunk{
+				{Position: 0, Type: diff.Add, Text: "a", Len: 1},
+			},
+		}
+		err := wsjson.Write(ctx, sender, msg)
+		require.NoError(t, err)
+	}
+
+	// wait until first message is processed (no refill should happen within 1s)
+	var version int64
+	deadline := time.Now().Add(1 * time.Second)
+	for {
+		fileFromCache, ok := handler.fileCache.Get(file.ID)
+		if !ok {
+			if time.Now().After(deadline) {
+				require.True(t, ok)
+			}
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		fileFromCache.mut.Lock()
+		version = fileFromCache.Version
+		fileFromCache.mut.Unlock()
+		if version >= 1 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	assert.Equal(t, int64(1), version)
+
+	sender.Close(websocket.StatusNormalClosure, "")
+}
+
 func Benchmark_onChunkMessage(b *testing.B) {
 	log.SetOutput(io.Discard)
 

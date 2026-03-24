@@ -64,6 +64,7 @@ func Test_loadTest(t *testing.T) {
 			JWTSecret:           []byte("secret"),
 			FlushInterval:       time.Second,
 			MinChangesThreshold: 5,
+			SubscriberRateBurst: 500,
 		}
 		handler := New(db, fs, opts)
 		ts := httptest.NewServer(handler)
@@ -201,6 +202,7 @@ func Test_loadTest_samePosition(t *testing.T) {
 		JWTSecret:           []byte("secret"),
 		FlushInterval:       time.Second,
 		MinChangesThreshold: 5,
+		SubscriberRateBurst: 500,
 	}
 	handler := New(db, fs, opts)
 	ts := httptest.NewServer(handler)

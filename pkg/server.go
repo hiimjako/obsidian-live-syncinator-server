@@ -24,14 +24,16 @@ const (
 )
 
 type Options struct {
-	JWTSecret            []byte
-	MaxFileSizeMB        int64
-	OperationTTL         time.Duration
-	CacheSize            int
-	MinChangesThreshold  int64
-	FlushInterval        time.Duration
-	SnapshotCheckpoint   int64 // Create full snapshot every N versions
-	MaxSnapshotDiffChain int64 // Max consecutive diffs before forcing full snapshot
+	JWTSecret              []byte
+	MaxFileSizeMB          int64
+	OperationTTL           time.Duration
+	CacheSize              int
+	MinChangesThreshold    int64
+	FlushInterval          time.Duration
+	SnapshotCheckpoint     int64 // Create full snapshot every N versions
+	MaxSnapshotDiffChain   int64 // Max consecutive diffs before forcing full snapshot
+	SubscriberRateInterval time.Duration
+	SubscriberRateBurst    int
 }
 
 func (o *Options) Default() {
@@ -62,6 +64,14 @@ func (o *Options) Default() {
 	if o.MaxSnapshotDiffChain <= 0 {
 		o.MaxSnapshotDiffChain = 10 // Max 10 consecutive diffs
 	}
+
+	if o.SubscriberRateInterval <= 0 {
+		o.SubscriberRateInterval = 50 * time.Millisecond
+	}
+
+	if o.SubscriberRateBurst <= 0 {
+		o.SubscriberRateBurst = 16
+	}
 }
 
 type CachedFile struct {
@@ -85,13 +95,15 @@ type syncinator struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	jwtSecret            []byte
-	maxFileSizeBytes     int64
-	operationTTL         time.Duration
-	minChangesThreshold  int64
-	flushInterval        time.Duration
-	snapshotCheckpoint   int64
-	maxSnapshotDiffChain int64
+	jwtSecret              []byte
+	maxFileSizeBytes       int64
+	operationTTL           time.Duration
+	minChangesThreshold    int64
+	flushInterval          time.Duration
+	snapshotCheckpoint     int64
+	maxSnapshotDiffChain   int64
+	subscriberRateInterval time.Duration
+	subscriberRateBurst    int
 
 	publishLimiter *rate.Limiter
 	serverMux      *http.ServeMux
@@ -114,13 +126,15 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 		ctx:    ctx,
 		cancel: cancel,
 
-		jwtSecret:            opts.JWTSecret,
-		maxFileSizeBytes:     opts.MaxFileSizeMB << 20,
-		operationTTL:         opts.OperationTTL,
-		minChangesThreshold:  opts.MinChangesThreshold,
-		flushInterval:        opts.FlushInterval,
-		snapshotCheckpoint:   opts.SnapshotCheckpoint,
-		maxSnapshotDiffChain: opts.MaxSnapshotDiffChain,
+		jwtSecret:              opts.JWTSecret,
+		maxFileSizeBytes:       opts.MaxFileSizeMB << 20,
+		operationTTL:           opts.OperationTTL,
+		minChangesThreshold:    opts.MinChangesThreshold,
+		flushInterval:          opts.FlushInterval,
+		snapshotCheckpoint:     opts.SnapshotCheckpoint,
+		maxSnapshotDiffChain:   opts.MaxSnapshotDiffChain,
+		subscriberRateInterval: opts.SubscriberRateInterval,
+		subscriberRateBurst:    opts.SubscriberRateBurst,
 
 		serverMux:      http.NewServeMux(),
 		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),
