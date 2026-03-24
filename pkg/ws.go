@@ -259,22 +259,24 @@ func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
 		log.Println(err)
 	}
 
-	s.subscribersMu.Lock()
-	defer s.subscribersMu.Unlock()
+	s.subscribersMu.RLock()
+	ws, ok := s.subscribers[sender.workspaceID]
+	s.subscribersMu.RUnlock()
 
-	for sub := range s.subscribers {
-		// delete dead connections
+	if !ok {
+		return
+	}
+
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	for sub := range ws.subs {
 		if !sub.IsConnected() {
-			delete(s.subscribers, sub)
+			delete(ws.subs, sub)
 			continue
 		}
 
-		isSameWorkspace := sub.workspaceID == sender.workspaceID
 		isSameClient := sub.clientID == sender.clientID
-
-		if !isSameWorkspace {
-			continue
-		}
 
 		switch m := msg.(type) {
 		case ChunkMessage:
@@ -650,15 +652,31 @@ func (s *syncinator) ReconstructSnapshot(fileID, version, workspaceID int64) (st
 
 func (s *syncinator) addSubscriber(sub *subscriber) {
 	s.subscribersMu.Lock()
-	s.subscribers[sub] = struct{}{}
+	ws, ok := s.subscribers[sub.workspaceID]
+	if !ok {
+		ws = &workspaceSubscribers{subs: make(map[*subscriber]struct{})}
+		s.subscribers[sub.workspaceID] = ws
+	}
 	s.subscribersMu.Unlock()
+
+	ws.mu.Lock()
+	ws.subs[sub] = struct{}{}
+	ws.mu.Unlock()
 }
 
 // deleteSubscriber deletes the given subscriber.
 func (s *syncinator) deleteSubscriber(sub *subscriber) {
-	s.subscribersMu.Lock()
-	delete(s.subscribers, sub)
-	s.subscribersMu.Unlock()
+	s.subscribersMu.RLock()
+	ws, ok := s.subscribers[sub.workspaceID]
+	s.subscribersMu.RUnlock()
+
+	if !ok {
+		return
+	}
+
+	ws.mu.Lock()
+	delete(ws.subs, sub)
+	ws.mu.Unlock()
 }
 
 // fetchAndCacheFile caches the file from db

@@ -63,13 +63,18 @@ func Test_wsAuth(t *testing.T) {
 
 		time.Sleep(100 * time.Millisecond)
 
-		handler.subscribersMu.Lock()
-		assert.Len(t, handler.subscribers, 1)
-		for subscriber := range handler.subscribers {
+		handler.subscribersMu.RLock()
+		ws, ok := handler.subscribers[workspaceID]
+		handler.subscribersMu.RUnlock()
+
+		require.True(t, ok)
+		ws.mu.Lock()
+		assert.Len(t, ws.subs, 1)
+		for subscriber := range ws.subs {
 			assert.Equal(t, workspaceID, subscriber.workspaceID)
 			assert.NotEmpty(t, subscriber.clientID)
 		}
-		handler.subscribersMu.Unlock()
+		ws.mu.Unlock()
 
 		sender.Close(websocket.StatusNormalClosure, "")
 	})

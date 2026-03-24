@@ -75,6 +75,11 @@ type LockedCachedFile struct {
 	CachedFile
 }
 
+type workspaceSubscribers struct {
+	mu   sync.Mutex
+	subs map[*subscriber]struct{}
+}
+
 type syncinator struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -90,13 +95,14 @@ type syncinator struct {
 
 	publishLimiter *rate.Limiter
 	serverMux      *http.ServeMux
-	subscribersMu  sync.Mutex
-	subscribers    map[*subscriber]struct{}
-	fileCache      *lru.Cache[int64, *LockedCachedFile]
-	loader         *singleflight.Group
-	storage        filestorage.Storage
-	db             *repository.Queries
-	conn           *sql.DB
+	subscribersMu  sync.RWMutex
+	// empty workspace entries are not cleaned up to avoid write-locking during broadcast
+	subscribers map[int64]*workspaceSubscribers
+	fileCache   *lru.Cache[int64, *LockedCachedFile]
+	loader      *singleflight.Group
+	storage     filestorage.Storage
+	db          *repository.Queries
+	conn        *sql.DB
 }
 
 func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
@@ -118,7 +124,7 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 
 		serverMux:      http.NewServeMux(),
 		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),
-		subscribers:    make(map[*subscriber]struct{}),
+		subscribers:    make(map[int64]*workspaceSubscribers),
 		loader:         &singleflight.Group{},
 		storage:        fs,
 		conn:           db,
