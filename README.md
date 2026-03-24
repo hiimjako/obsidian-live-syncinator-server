@@ -91,5 +91,6 @@ This is recreational software provided as-is, without any warranty. While the pl
 # TODO
 
 - Create cluster of servers
-- Ad DST (deterministic simulation testing) to test chunks
+- Add DST (deterministic simulation testing) to test chunks
 - Add optional encryption to files
+- Add OpenTelemetry instrumentation (tracing OT operations, HTTP middleware, broadcast)
