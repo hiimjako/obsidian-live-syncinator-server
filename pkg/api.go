@@ -15,6 +15,7 @@ import (
 	"net/textproto"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hiimjako/syncinator/internal/repository"
@@ -74,6 +75,51 @@ func (s *syncinator) apiHandler() http.Handler {
 
 	routerWithStack := stack(router)
 	return routerWithStack
+}
+
+func writeMultipartResponse(w http.ResponseWriter, metadata any, mimeType string, filename string, content io.Reader) error {
+	mw := multipart.NewWriter(w)
+	defer mw.Close()
+
+	w.Header().Set("Content-Type", "multipart/mixed; boundary="+mw.Boundary())
+	w.WriteHeader(http.StatusOK)
+
+	metaPart, err := mw.CreatePart(textproto.MIMEHeader{
+		"Content-Type":        {"application/json"},
+		"Content-Disposition": {fmt.Sprintf("form-data; name=%q", MultipartMetadata)},
+	})
+	if err != nil {
+		return fmt.Errorf("creating metadata part: %w", err)
+	}
+	if err := json.NewEncoder(metaPart).Encode(metadata); err != nil {
+		return fmt.Errorf("encoding metadata: %w", err)
+	}
+
+	mimeHeader := textproto.MIMEHeader{
+		"Content-Type":        {mimeType},
+		"Content-Disposition": {fmt.Sprintf(`form-data; filename=%q`, filename)},
+	}
+	if !mimeutils.IsText(mimeType) {
+		mimeHeader["Content-Transfer-Encoding"] = []string{"base64"}
+	}
+
+	filePart, err := mw.CreatePart(mimeHeader)
+	if err != nil {
+		return fmt.Errorf("creating file part: %w", err)
+	}
+
+	var writer io.Writer = filePart
+	if !mimeutils.IsText(mimeType) {
+		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
+		defer encoder.Close()
+		writer = encoder
+	}
+
+	if _, err = io.Copy(writer, content); err != nil {
+		return fmt.Errorf("writing content: %w", err)
+	}
+
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -234,25 +280,6 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mw := multipart.NewWriter(w)
-	defer mw.Close()
-
-	w.Header().Set("Content-Type", "multipart/mixed; boundary="+mw.Boundary())
-	w.WriteHeader(http.StatusOK)
-
-	metaPart, err := mw.CreatePart(textproto.MIMEHeader{
-		"Content-Type":        []string{"application/json"},
-		"Content-Disposition": []string{fmt.Sprintf("form-data; name=%q", MultipartMetadata)},
-	})
-	if err != nil {
-		log.Printf("error creating metadata part: %v", err)
-		return
-	}
-	if err := json.NewEncoder(metaPart).Encode(file); err != nil {
-		log.Printf("error encoding file metadata: %v", err)
-		return
-	}
-
 	fileContent, err := s.storage.ReadObject(file.DiskPath)
 	if err != nil {
 		log.Printf("error reading file %d: %v", file.ID, err)
@@ -260,30 +287,8 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer fileContent.Close()
 
-	filename := path.Base(file.WorkspacePath)
-	mimeHeader := textproto.MIMEHeader{
-		"Content-Type":        []string{file.MimeType},
-		"Content-Disposition": []string{fmt.Sprintf(`form-data; filename=%q`, filename)},
-	}
-	if !mimeutils.IsText(file.MimeType) {
-		mimeHeader["Content-Transfer-Encoding"] = []string{"base64"}
-	}
-
-	filePart, err := mw.CreatePart(mimeHeader)
-	if err != nil {
-		log.Printf("error creating file part: %v", err)
-		return
-	}
-
-	var writer = filePart
-	if !mimeutils.IsText(file.MimeType) {
-		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
-		defer encoder.Close()
-		writer = encoder
-	}
-
-	if _, err = io.Copy(writer, fileContent); err != nil {
-		log.Printf("error streaming file content: %v", err)
+	if err := writeMultipartResponse(w, file, file.MimeType, path.Base(file.WorkspacePath), fileContent); err != nil {
+		log.Printf("error writing multipart response: %v", err)
 		return
 	}
 }
@@ -319,55 +324,14 @@ func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	mw := multipart.NewWriter(w)
-	defer mw.Close()
-
-	w.Header().Set("Content-Type", "multipart/mixed; boundary="+mw.Boundary())
-	w.WriteHeader(http.StatusOK)
-
-	metaPart, err := mw.CreatePart(textproto.MIMEHeader{
-		"Content-Type":        []string{"application/json"},
-		"Content-Disposition": []string{fmt.Sprintf("form-data; name=%q", MultipartMetadata)},
-	})
-	if err != nil {
-		log.Printf("error creating metadata part: %v", err)
-		return
-	}
-	if err := json.NewEncoder(metaPart).Encode(snapshot); err != nil {
-		log.Printf("error encoding snapshot metadata: %v", err)
-		return
-	}
-
 	fileMeta, err := s.db.FetchFile(r.Context(), snapshot.FileID)
 	if err != nil {
 		log.Printf("error fetching file metadata for snapshot: %v", err)
 		return
 	}
 
-	filename := path.Base(fileMeta.WorkspacePath)
-	mimeHeader := textproto.MIMEHeader{
-		"Content-Type":        []string{fileMeta.MimeType},
-		"Content-Disposition": []string{fmt.Sprintf(`form-data; filename=%q`, filename)},
-	}
-	if !mimeutils.IsText(fileMeta.MimeType) {
-		mimeHeader["Content-Transfer-Encoding"] = []string{"base64"}
-	}
-
-	filePart, err := mw.CreatePart(mimeHeader)
-	if err != nil {
-		log.Printf("error creating file part: %v", err)
-		return
-	}
-
-	var writer = filePart
-	if !mimeutils.IsText(fileMeta.MimeType) {
-		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
-		defer encoder.Close()
-		writer = encoder
-	}
-
-	if _, err = writer.Write([]byte(content)); err != nil {
-		log.Printf("error writing snapshot content: %v", err)
+	if err := writeMultipartResponse(w, snapshot, fileMeta.MimeType, path.Base(fileMeta.WorkspacePath), strings.NewReader(content)); err != nil {
+		log.Printf("error writing multipart response: %v", err)
 		return
 	}
 }
