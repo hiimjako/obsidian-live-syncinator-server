@@ -553,9 +553,10 @@ func (s *syncinator) ReconstructSnapshot(fileID, version, workspaceID int64) (st
 		return "", err
 	}
 
-	// Find the most recent full snapshot at or before the requested version
-	// and collect all diffs that need to be applied
+	// Walk snapshots (DESC order) to find the base full snapshot and
+	// collect any diff snapshots between the base and the target version.
 	var fullSnapshot repository.Snapshot
+	var foundBase bool
 	diffSnapshots := make([]repository.Snapshot, 0)
 
 	for _, snapshot := range snapshots {
@@ -565,26 +566,22 @@ func (s *syncinator) ReconstructSnapshot(fileID, version, workspaceID int64) (st
 
 		switch snapshot.Type {
 		case "diff":
-			// Collect diffs newer than the first full snapshot we encounter.
-			// FetchSnapshots returns DESC order, so diffs for this version appear
-			// before the base snapshot in the list.
-			if fullSnapshot.DiskPath == "" {
+			if !foundBase {
 				diffSnapshots = append(diffSnapshots, snapshot)
 			}
 		case "file":
-			// First full snapshot at or before target version is the correct base.
-			if fullSnapshot.DiskPath == "" {
+			if !foundBase {
 				fullSnapshot = snapshot
+				foundBase = true
 			}
 		}
 
-		if fullSnapshot.DiskPath != "" {
+		if foundBase {
 			break
 		}
 	}
 
-	// Verify we found a full snapshot
-	if fullSnapshot.DiskPath == "" {
+	if !foundBase {
 		return "", errors.New("no full snapshot found")
 	}
 

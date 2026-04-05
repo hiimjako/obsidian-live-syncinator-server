@@ -115,22 +115,27 @@ func Apply(text []rune, chunk Chunk) []rune {
 	panic("not reachable")
 }
 
-// Transform updates op2 based on op1
-// op1 is the operation that has already been applied.
-// op2 is the operation that needs to be transformed.
+// Transform adjusts op2 so it can be applied after op1 has already been applied.
+// This is the core of Operational Transformation (OT): given two concurrent edits
+// that were both created against the same document state, Transform produces an
+// op2' that achieves the same intent when applied after op1.
+//
+// Four cases based on (op1.Type, op2.Type):
+//
+//	Add+Add:    op1 inserted text before op2 → shift op2 right by op1.Len
+//	Add+Remove: op1 inserted before/inside op2's range → shift or expand op2
+//	Remove+Add: op1 removed text before op2 → shift op2 left (clamped)
+//	Remove+Remove: ranges may overlap → shrink op2 by overlap, adjust position
 func Transform(op1, op2 Chunk) Chunk {
 	if op1.Type == Add {
 		if op2.Type == Add {
-			// If op1 is inserted before op2, shift op2's position
 			if op1.Position < op2.Position || (op1.Position == op2.Position) {
 				op2.Position += op1.Len
 			}
 		} else {
-			// If op1 is inserted before op2's start, shift op2's position
 			if op1.Position <= op2.Position {
 				op2.Position += op1.Len
 			} else if op1.Position < op2.Position+op2.Len {
-				// If op1 is inserted within op2's range, expand op2's length
 				op2.Len += op1.Len
 			}
 		}
@@ -141,22 +146,18 @@ func Transform(op1, op2 Chunk) Chunk {
 				op2.Position -= shift
 			}
 		} else {
-			// Calculate the new position of op2
+			// Both Remove: adjust for overlap between the two deleted ranges
 			newOp2Position := op2.Position
 			if op1.Position < op2.Position {
 				newOp2Position -= min(op1.Len, op2.Position-op1.Position)
 			}
 
-			// Calculate the new length of op2
-			newOp2Len := op2.Len
 			overlapStart := max(op1.Position, op2.Position)
 			overlapEnd := min(op1.Position+op1.Len, op2.Position+op2.Len)
 			overlapLen := max(0, overlapEnd-overlapStart)
 
-			newOp2Len -= overlapLen
-
 			op2.Position = newOp2Position
-			op2.Len = newOp2Len
+			op2.Len -= overlapLen
 		}
 	}
 

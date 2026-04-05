@@ -192,7 +192,7 @@ func (s *syncinator) listFilesHandler(w http.ResponseWriter, r *http.Request) {
 func (s *syncinator) listFileSnapshotsHandler(w http.ResponseWriter, r *http.Request) {
 	fileID, err := strconv.Atoi(r.PathValue("id"))
 
-	if fileID == 0 || err != nil {
+	if err != nil {
 		http.Error(w, "invalid file id", http.StatusBadRequest)
 		return
 	}
@@ -257,7 +257,7 @@ func (s *syncinator) listOperationsHandler(w http.ResponseWriter, r *http.Reques
 func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 	fileID, err := strconv.Atoi(r.PathValue("id"))
 
-	if fileID == 0 || err != nil {
+	if err != nil {
 		http.Error(w, "invalid file id", http.StatusBadRequest)
 		return
 	}
@@ -295,7 +295,7 @@ func (s *syncinator) fetchFileHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request) {
 	fileID, err := strconv.Atoi(r.PathValue("id"))
-	if fileID == 0 || err != nil {
+	if err != nil {
 		http.Error(w, "invalid file id", http.StatusBadRequest)
 		return
 	}
@@ -427,7 +427,7 @@ func (s *syncinator) createFileHandler(w http.ResponseWriter, r *http.Request) {
 func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 	fileID, err := strconv.Atoi(r.PathValue("id"))
 
-	if fileID == 0 || err != nil {
+	if err != nil {
 		http.Error(w, "invalid file id", http.StatusBadRequest)
 		return
 	}
@@ -502,7 +502,7 @@ func (s *syncinator) deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 func (s *syncinator) updateFileHandler(w http.ResponseWriter, r *http.Request) {
 	fileID, err := strconv.Atoi(r.PathValue("id"))
 
-	if fileID == 0 || err != nil {
+	if err != nil {
 		http.Error(w, "invalid file id", http.StatusBadRequest)
 		return
 	}
