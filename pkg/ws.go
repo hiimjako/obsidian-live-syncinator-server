@@ -136,117 +136,113 @@ func (s *syncinator) onChunkMessage(sender *subscriber, data ChunkMessage) {
 	file.mut.Lock()
 	defer file.mut.Unlock()
 
-	chunkToApply := data.Chunks
-
-	// the incoming data was applied on older version
-	// need to transform it
-	if data.Version < file.Version {
-		dbOperations, err := s.db.FetchFileOperationsFromVersion(s.ctx, repository.FetchFileOperationsFromVersionParams{
-			FileID:      file.ID,
-			Version:     data.Version,
-			WorkspaceID: file.WorkspaceID,
-		})
-		if err != nil {
-			log.Printf(
-				"error while fetching operations, skipping message. fileId: %v, version: %v, err: %v\n",
-				data.FileID,
-				data.Version,
-				err,
-			)
-			return
-		}
-
-		currVersion := data.Version
-		for i := range dbOperations {
-			if currVersion+1 != dbOperations[i].Version {
-				log.Printf(
-					"missing operation in history to transform, skipping message. fileId: %v, version: %v\n",
-					data.FileID,
-					data.Version,
-				)
-				return
-			}
-
-			var previousChunk []diff.Chunk
-			err := json.Unmarshal([]byte(dbOperations[i].Operation), &previousChunk)
-			if err != nil {
-				log.Printf(
-					"error while parsing operations, skipping message. fileId: %v, version: %v, err: %v\n",
-					data.FileID,
-					data.Version,
-					err,
-				)
-				return
-			}
-
-			chunkToApply = diff.TransformMultiple(previousChunk, chunkToApply)
-			currVersion = dbOperations[i].Version
-		}
+	chunkToApply, err := transformStaleChunks(s.ctx, s.db, file, data.Version, data.Chunks)
+	if err != nil {
+		log.Printf("error transforming chunks. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
+		return
 	}
 
 	newContent := diff.ApplyMultiple(file.Content, chunkToApply)
 	newVersion := file.Version + 1
 
-	msgToBroadcast := ChunkMessage{
-		WsMessageHeader: data.WsMessageHeader,
-		Chunks:          chunkToApply,
-		Version:         newVersion,
-	}
-
-	committed := false
-	tx, err := s.conn.BeginTx(s.ctx, nil)
+	err = persistChunkOperation(s.ctx, s.conn, s.db, file.ID, newVersion, chunkToApply)
 	if err != nil {
-		log.Printf("error opening transaction. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
+		log.Printf("error persisting operation. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
 		return
 	}
 
-	txq := s.db.WithTx(tx)
-	defer func() {
-		if !committed {
-			err := tx.Rollback()
-			if err != nil {
-				log.Printf("error rollbacking transaction. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
-			}
-		}
-	}()
-
-	operation, err := json.Marshal(msgToBroadcast.Chunks)
-	if err != nil {
-		log.Printf("error while marshaling operation. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
-		return
-	}
-	err = txq.CreateOperation(s.ctx, repository.CreateOperationParams{
-		FileID:    file.ID,
-		Version:   newVersion,
-		Operation: string(operation),
-	})
-	if err != nil {
-		log.Printf("error while storing operation. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
-		return
-	}
-
-	err = txq.UpdateFileVersion(s.ctx, repository.UpdateFileVersionParams{
-		ID:      file.ID,
-		Version: newVersion,
-	})
-	if err != nil {
-		log.Printf("error while updating version. fileId: %v, version: %v, err: %v\n", data.FileID, data.Version, err)
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		log.Printf("failed to commit transaction: %v", err)
-		return
-	}
-	committed = true
-
-	// Apply in-memory changes only after successful commit
 	file.Content = newContent
 	file.Version = newVersion
 	file.pendingChanges += 1
 	file.UpdatedAt = time.Now()
 
-	s.broadcastMessage(sender, msgToBroadcast)
+	s.broadcastMessage(sender, ChunkMessage{
+		WsMessageHeader: data.WsMessageHeader,
+		Chunks:          chunkToApply,
+		Version:         newVersion,
+	})
+}
+
+func transformStaleChunks(
+	ctx context.Context,
+	db *repository.Queries,
+	file *LockedCachedFile,
+	incomingVersion int64,
+	incomingChunks []diff.Chunk,
+) ([]diff.Chunk, error) {
+	if incomingVersion >= file.Version {
+		return incomingChunks, nil
+	}
+
+	dbOperations, err := db.FetchFileOperationsFromVersion(ctx, repository.FetchFileOperationsFromVersionParams{
+		FileID:      file.ID,
+		Version:     incomingVersion,
+		WorkspaceID: file.WorkspaceID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("fetching operations: %w", err)
+	}
+
+	transformed := incomingChunks
+	currVersion := incomingVersion
+	for i := range dbOperations {
+		if currVersion+1 != dbOperations[i].Version {
+			return nil, fmt.Errorf("missing operation in history at version %d", currVersion+1)
+		}
+
+		var previousChunk []diff.Chunk
+		if err := json.Unmarshal([]byte(dbOperations[i].Operation), &previousChunk); err != nil {
+			return nil, fmt.Errorf("parsing operation at version %d: %w", dbOperations[i].Version, err)
+		}
+
+		transformed = diff.TransformMultiple(previousChunk, transformed)
+		currVersion = dbOperations[i].Version
+	}
+
+	return transformed, nil
+}
+
+func persistChunkOperation(
+	ctx context.Context,
+	conn *sql.DB,
+	db *repository.Queries,
+	fileID int64,
+	newVersion int64,
+	chunks []diff.Chunk,
+) error {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("opening transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txq := db.WithTx(tx)
+
+	operation, err := json.Marshal(chunks)
+	if err != nil {
+		return fmt.Errorf("marshaling operation: %w", err)
+	}
+
+	if err := txq.CreateOperation(ctx, repository.CreateOperationParams{
+		FileID:    fileID,
+		Version:   newVersion,
+		Operation: string(operation),
+	}); err != nil {
+		return fmt.Errorf("storing operation: %w", err)
+	}
+
+	if err := txq.UpdateFileVersion(ctx, repository.UpdateFileVersionParams{
+		ID:      fileID,
+		Version: newVersion,
+	}); err != nil {
+		return fmt.Errorf("updating version: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("committing transaction: %w", err)
+	}
+
+	return nil
 }
 
 func (s *syncinator) broadcastMessage(sender *subscriber, msg any) {
