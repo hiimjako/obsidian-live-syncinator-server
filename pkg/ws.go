@@ -366,7 +366,7 @@ func (s *syncinator) processFileChanges() {
 // purgeCache is a routine to delete old cached items:
 // - operation from "operations" table
 func (s *syncinator) purgeCache() {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(s.purgeCacheInterval)
 	for {
 		select {
 		case <-ticker.C:

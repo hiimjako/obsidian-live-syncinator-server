@@ -17,7 +17,8 @@ type authKey string
 const (
 	AuthWorkspaceID authKey = "middleware.auth.workspaceID"
 
-	Issuer = "obsidian-rt"
+	Issuer     = "obsidian-rt"
+	jwtLeeway  = 5 * time.Second
 )
 
 type CustomClaims struct {
@@ -106,7 +107,7 @@ func VerifyToken(ao AuthOptions, tokenString string) (int64, error) {
 			return ao.SecretKey, nil
 		},
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}),
-		jwt.WithLeeway(5*time.Second),
+		jwt.WithLeeway(jwtLeeway),
 		jwt.WithIssuer(Issuer),
 	)
 	if err != nil {

@@ -34,6 +34,7 @@ type Options struct {
 	MaxSnapshotDiffChain   int64 // Max consecutive diffs before forcing full snapshot
 	SubscriberRateInterval time.Duration
 	SubscriberRateBurst    int
+	PurgeCacheInterval     time.Duration
 }
 
 func (o *Options) Default() {
@@ -72,6 +73,10 @@ func (o *Options) Default() {
 	if o.SubscriberRateBurst <= 0 {
 		o.SubscriberRateBurst = 16
 	}
+
+	if o.PurgeCacheInterval <= 0 {
+		o.PurgeCacheInterval = 10 * time.Minute
+	}
 }
 
 type CachedFile struct {
@@ -104,6 +109,7 @@ type syncinator struct {
 	maxSnapshotDiffChain   int64
 	subscriberRateInterval time.Duration
 	subscriberRateBurst    int
+	purgeCacheInterval     time.Duration
 
 	publishLimiter *rate.Limiter
 	serverMux      *http.ServeMux
@@ -135,6 +141,7 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 		maxSnapshotDiffChain:   opts.MaxSnapshotDiffChain,
 		subscriberRateInterval: opts.SubscriberRateInterval,
 		subscriberRateBurst:    opts.SubscriberRateBurst,
+		purgeCacheInterval:     opts.PurgeCacheInterval,
 
 		serverMux:      http.NewServeMux(),
 		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),
