@@ -144,7 +144,7 @@ func New(db *sql.DB, fs filestorage.Storage, opts Options) *syncinator {
 		purgeCacheInterval:     opts.PurgeCacheInterval,
 
 		serverMux:      http.NewServeMux(),
-		publishLimiter: rate.NewLimiter(rate.Every(100*time.Millisecond), 8),
+		publishLimiter: rate.NewLimiter(rate.Every(opts.SubscriberRateInterval), opts.SubscriberRateBurst),
 		subscribers:    make(map[int64]*workspaceSubscribers),
 		loader:         &singleflight.Group{},
 		storage:        fs,
@@ -178,7 +178,7 @@ func (s *syncinator) initCache(cacheSize int) {
 		file.mut.Lock()
 		defer file.mut.Unlock()
 
-		err := s.writeFileToStorage(file.CachedFile)
+		err := s.flushFileToStorage(file.CachedFile)
 		if err != nil {
 			log.Printf("error while writing file %d before purge: %v\n", file.ID, err)
 		}

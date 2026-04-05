@@ -337,7 +337,7 @@ func (s *syncinator) processFileChanges() {
 				log.Printf("error while creating snapshot: %v", err)
 			}
 
-			err = s.writeFileToStorage(file.CachedFile)
+			err = s.flushFileToStorage(file.CachedFile)
 			if err != nil {
 				log.Println(err)
 			} else {
@@ -385,54 +385,38 @@ func (s *syncinator) purgeCache() {
 func (s *syncinator) WriteFileToStorage(fileID int64) error {
 	file, ok := s.fileCache.Get(fileID)
 	if !ok {
-		// not in cache, it means it is already up to date
 		return nil
 	}
 
 	file.mut.Lock()
 	defer file.mut.Unlock()
 
-	if file.pendingChanges <= 0 {
-		return nil
-	}
-
-	err := s.writeFileToStorage(file.CachedFile)
-	if err != nil {
+	if err := s.flushFileToStorage(file.CachedFile); err != nil {
 		return err
 	}
 
 	file.pendingChanges = 0
-
 	return nil
 }
 
-func (s *syncinator) writeFileToStorage(file CachedFile) error {
+func (s *syncinator) flushFileToStorage(file CachedFile) error {
 	if file.pendingChanges <= 0 {
 		return nil
 	}
 
-	err := s.storage.WriteObject(file.DiskPath, strings.NewReader(file.Content))
+	if err := s.storage.WriteObject(file.DiskPath, strings.NewReader(file.Content)); err != nil {
+		return err
+	}
+
+	hash, err := filestorage.GenerateHash(strings.NewReader(file.Content))
 	if err != nil {
 		return err
 	}
 
-	fileReader := strings.NewReader(file.Content)
-	hash, err := filestorage.GenerateHash(fileReader)
-	if err != nil {
-		return err
-	}
-
-	err = s.db.UpdateFileHash(s.ctx, repository.UpdateFileHashParams{
-
-		ID: file.ID,
-
+	return s.db.UpdateFileHash(s.ctx, repository.UpdateFileHashParams{
+		ID:   file.ID,
 		Hash: hash,
 	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (s *syncinator) CreateFileSnapshot(file CachedFile) error {
