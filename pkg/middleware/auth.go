@@ -17,8 +17,8 @@ type authKey string
 const (
 	AuthWorkspaceID authKey = "middleware.auth.workspaceID"
 
-	Issuer     = "obsidian-rt"
-	jwtLeeway  = 5 * time.Second
+	Issuer    = "obsidian-rt"
+	jwtLeeway = 5 * time.Second
 )
 
 type CustomClaims struct {
