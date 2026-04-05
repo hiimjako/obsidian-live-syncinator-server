@@ -1,6 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.24.2-alpine AS build
-ARG TARGETPLATFORM
-ARG BUILDPLATFORM
+FROM golang:1.24.2-alpine AS build
 RUN addgroup -g 501 app && \
     adduser -D -u 501 -G app app && \
     grep app /etc/passwd > /etc/passwd_app
