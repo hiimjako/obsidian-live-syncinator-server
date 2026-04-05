@@ -77,7 +77,7 @@ func (s *syncinator) apiHandler() http.Handler {
 	return routerWithStack
 }
 
-func writeMultipartResponse(w http.ResponseWriter, metadata any, mimeType string, filename string, content io.Reader) error {
+func writeMultipartResponse(w http.ResponseWriter, metadata any, mimeType, filename string, content io.Reader) error {
 	mw := multipart.NewWriter(w)
 	defer mw.Close()
 
@@ -108,7 +108,7 @@ func writeMultipartResponse(w http.ResponseWriter, metadata any, mimeType string
 		return fmt.Errorf("creating file part: %w", err)
 	}
 
-	var writer io.Writer = filePart
+	var writer = filePart
 	if !mimeutils.IsText(mimeType) {
 		encoder := base64.NewEncoder(base64.StdEncoding, filePart)
 		defer encoder.Close()
@@ -330,7 +330,8 @@ func (s *syncinator) fetchSnapshotHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := writeMultipartResponse(w, snapshot, fileMeta.MimeType, path.Base(fileMeta.WorkspacePath), strings.NewReader(content)); err != nil {
+	fname := path.Base(fileMeta.WorkspacePath)
+	if err := writeMultipartResponse(w, snapshot, fileMeta.MimeType, fname, strings.NewReader(content)); err != nil {
 		log.Printf("error writing multipart response: %v", err)
 		return
 	}
